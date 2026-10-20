@@ -9,12 +9,14 @@
   let language = $state<Language>('fr');
   let position = $state(0);
   let photoPosition = $state(0);
+  let photoThumbs = $state<HTMLDivElement>();
   let commentsOpen = $state(false);
   let storyOpen = $state(false);
   let storyCopy = $state<HTMLParagraphElement>();
   let storyOverflows = $state(false);
   let lightboxOpen = $state(false);
   let autoplay = $state(true);
+  let compactGallery = $state(false);
   let pageVisible = $state(false);
   let visitorName = $state('');
   let visitorMessage = $state('');
@@ -149,6 +151,31 @@
     autoplay = false;
     photoPosition = i;
   }
+  $effect(() => {
+    const strip = photoThumbs;
+    const selectedIndex = photoPosition;
+    const dayId = currentDay?.id;
+    if (!strip || !dayId || !compactGallery) return;
+    let frame = 0;
+    function keepThumbnailVisible() {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const thumbnail = strip!.children[selectedIndex] as HTMLElement | undefined;
+        if (!thumbnail) return;
+        const item = thumbnail.getBoundingClientRect();
+        const viewport = strip!.getBoundingClientRect();
+        if (item.left >= viewport.left + 3 && item.right <= viewport.right - 3) return;
+        strip!.scrollBy({
+          left: item.left - viewport.left - (strip!.clientWidth - thumbnail.offsetWidth) / 2,
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+        });
+      });
+    }
+    const observer = new ResizeObserver(keepThumbnailVisible);
+    observer.observe(strip);
+    keepThumbnailVisible();
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
+  });
   function switchPhoto(shift: number, automatic = false) {
     if (!currentDay?.photos.length) return;
     if (!automatic) autoplay = false;
@@ -172,7 +199,7 @@
   $effect(() => {
     // Une nouvelle photo ou journée dispose toujours de cinq secondes complètes.
     const photoId = currentPhoto?.id;
-    if (!photoId || currentPhoto?.kind === 'video' || !autoplay || !pageVisible || commentsOpen || storyOpen || lightboxOpen || (currentDay?.photos.length ?? 0) < 2) return;
+    if (!photoId || compactGallery || currentPhoto?.kind === 'video' || !autoplay || !pageVisible || commentsOpen || storyOpen || lightboxOpen || (currentDay?.photos.length ?? 0) < 2) return;
     const timer = window.setTimeout(() => switchPhoto(1, true), 5000);
     return () => window.clearTimeout(timer);
   });
@@ -265,6 +292,10 @@
     } finally {submitting=false;}
   }
   onMount(() => {
+    const compactMedia = window.matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)');
+    const updateCompactGallery = () => { compactGallery = compactMedia.matches; };
+    updateCompactGallery();
+    compactMedia.addEventListener('change', updateCompactGallery);
     autoplay = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const updateVisibility = () => { pageVisible = !document.hidden; };
     updateVisibility();
@@ -275,6 +306,7 @@
     // Écouteur non passif requis : la molette pilote la frise plutôt que le scroll classique.
     experience.addEventListener('wheel', onWheel, { passive: false });
     return () => {
+      compactMedia.removeEventListener('change', updateCompactGallery);
       experience.removeEventListener('wheel', onWheel);
       document.removeEventListener('visibilitychange', updateVisibility);
     };
@@ -355,7 +387,7 @@
           <div class="gallery-nav">
             <span class="image-count">{String(photoPosition+1).padStart(2,'0')} / {String(currentDay.photos.length).padStart(2,'0')}</span>
             {#if currentDay.photos.length>1}
-              <div class="photo-thumbs">
+              <div class="photo-thumbs" bind:this={photoThumbs}>
                 {#each currentDay.photos as photo, i (photo.id)}
                   <button type="button" class:chosen={photoPosition===i} onclick={()=>selectPhoto(i)} aria-label="{photo.kind === 'video' ? t.video : t.picture} {i+1}" aria-pressed={photoPosition===i}>
                     <img src="/media/{photo.id}/thumb" alt="" loading="lazy" />
@@ -363,11 +395,11 @@
                   </button>
                 {/each}
               </div>
-              <div class="arrows">
+              {#if !compactGallery}<div class="arrows">
                 <button type="button" onclick={()=>switchPhoto(-1)} aria-label={t.previousPhoto}>←</button>
                 <button type="button" class="autoplay-toggle" onclick={()=>autoplay=!autoplay} aria-label={autoplay ? t.pause : t.play} title={autoplay ? t.pause : t.play}><span aria-hidden="true">{autoplay ? 'Ⅱ' : '▶'}</span></button>
                 <button type="button" onclick={()=>switchPhoto(1)} aria-label={t.nextPhoto}>→</button>
-              </div>
+              </div>{/if}
             {/if}
           </div>
         </div>
@@ -663,7 +695,6 @@
   .photo-frame::before, .photo-frame::after { width: 63px; height: 21px; top: -14px; }
   .photo-controls { padding-top: 8px; gap: 9px; }
   .photo-caption { font-size: 21px; -webkit-line-clamp: 2; line-clamp: 2; }
-  .gallery-nav { gap: 4px; }
   .image-count { font-size: 10px; }
   .arrows { gap: 0; }
   .timeline-shell { height: 133px; margin: 26px 18px 9px; }
@@ -722,6 +753,18 @@
 @media (hover: none) {
   .photo-hit span { opacity: .9; transform: rotate(-3deg); }
   .photo-hit-next span { transform: rotate(3deg); }
+}
+@media (max-width: 700px), (hover: none) and (pointer: coarse) {
+  .story-topline { display: none; }
+  .story-main { margin-top: 0; }
+  .gallery-nav { grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
+  .photo-thumbs { grid-column: 2; grid-row: 1; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; height: 64px; padding: 5px 3px 7px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x; scroll-snap-type: x proximity; scrollbar-width: none; }
+  .photo-thumbs::-webkit-scrollbar { display: none; }
+  .photo-thumbs button, .photo-thumbs button:nth-child(even) { flex-basis: 52px; height: 52px; transform: none; scroll-snap-align: center; }
+  .photo-thumbs button:focus-visible { outline: 1px solid var(--ink); outline-offset: 1px; }
+  .photo-thumbs img { object-fit: cover; }
+  .photo-hit-prev span, .photo-hit-next span, .arrows, .day-navigation { display: none; }
+  .timeline-shell { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
