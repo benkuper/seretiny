@@ -11,6 +11,8 @@
   let photoPosition = $state(0);
   let commentsOpen = $state(false);
   let storyOpen = $state(false);
+  let storyCopy = $state<HTMLParagraphElement>();
+  let storyOverflows = $state(false);
   let lightboxOpen = $state(false);
   let autoplay = $state(true);
   let pageVisible = $state(false);
@@ -73,6 +75,40 @@
   function localized(fr: string | null | undefined, en: string | null | undefined) {
     return language === 'en' && en?.trim() ? en : (fr || '');
   }
+  $effect(() => {
+    const paragraph = storyCopy;
+    const text = localized(currentDay?.body_fr, currentDay?.body_en);
+    if (!paragraph || !text.trim()) { storyOverflows = false; return; }
+    let frame = 0;
+    let disposed = false;
+    function scheduleMeasurement() {
+      if (disposed) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        // Measure the room available without the link so it cannot cause its own overflow.
+        const link = paragraph!.parentElement?.querySelector<HTMLButtonElement>('.read-link');
+        if (link) link.hidden = true;
+        storyOverflows = paragraph!.getClientRects().length === 0 ||
+          paragraph!.scrollHeight > paragraph!.clientHeight + 1 ||
+          paragraph!.scrollWidth > paragraph!.clientWidth + 1;
+        if (link) link.hidden = false;
+      });
+    }
+    const observer = new ResizeObserver(scheduleMeasurement);
+    observer.observe(paragraph);
+    if (paragraph.parentElement) observer.observe(paragraph.parentElement);
+    window.addEventListener('resize', scheduleMeasurement);
+    document.fonts.addEventListener('loadingdone', scheduleMeasurement);
+    void document.fonts.ready.then(scheduleMeasurement);
+    scheduleMeasurement();
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('resize', scheduleMeasurement);
+      document.fonts.removeEventListener('loadingdone', scheduleMeasurement);
+    };
+  });
   function prettyDate(date: string, compact=false) {
     const d = new Date(`${date}T12:00:00Z`);
     return new Intl.DateTimeFormat(language === 'fr' ? 'fr-FR' : 'en-GB', {
@@ -276,8 +312,8 @@
             <p class="chapter-name">{localized(currentDay.chapter_fr,currentDay.chapter_en)}</p>
             <div class="story-rule"></div>
             {#if localized(currentDay.body_fr,currentDay.body_en)}
-              <p class="story-copy">{localized(currentDay.body_fr,currentDay.body_en)}</p>
-              <button type="button" class="read-link" onclick={()=>storyOpen=true}>{t.read} <span>↗</span></button>
+              <p class="story-copy" bind:this={storyCopy}>{localized(currentDay.body_fr,currentDay.body_en)}</p>
+              {#if storyOverflows}<button type="button" class="read-link" onclick={()=>storyOpen=true}>{t.read} <span>↗</span></button>{/if}
             {/if}
           </div>
         {/key}
