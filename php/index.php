@@ -64,6 +64,7 @@ header('Content-Type: text/html; charset=utf-8');
 ?>
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#483c31"><meta name="description" content="SereTiny, le journal photo de construction d’une petite maison."><title>SereTiny — Le journal d’une petite maison</title><link rel="icon" href="<?= html(BASE_PATH) ?>/favicon.svg">
+<?php foreach ($assets['fonts'] ?? [] as $font): ?><link rel="preload" href="<?= html(BASE_PATH.'/'.$font) ?>" as="font" type="font/woff2" crossorigin="anonymous"><?php endforeach; ?>
 <?php foreach ($assets['css'] as $css): ?><link rel="stylesheet" href="<?= html(BASE_PATH.'/'.$css) ?>"><?php endforeach; ?>
 </head><body><div id="app"></div><noscript>Active JavaScript pour parcourir le journal et accéder à l’atelier.</noscript>
 <script id="seretiny-data" type="application/json"><?= json_encode($bootstrap,JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?></script>

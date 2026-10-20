@@ -62,6 +62,17 @@ for asset in assets:
     assert asset.startswith(base_path + '/'), asset
     code, body, headers = request(asset[len(base_path):], accept='*/*')
     assert code == 200, (asset, code)
+    if asset.endswith('.css'):
+        stylesheet = body.decode()
+        assert 'fonts.googleapis.com' not in stylesheet, 'Fonts must not depend on an external stylesheet'
+        assert '@font-face' in stylesheet, 'Missing bundled font declarations'
+        font_paths = set(re.findall(r'url\([\"\']?([^\)\"\']+\.woff2)[\"\']?\)', stylesheet))
+        assert font_paths, 'Missing local WOFF2 fonts'
+        for font_path in font_paths:
+            assert font_path.startswith(base_path + '/assets/'), font_path
+            font_code, font_body, font_headers = request(font_path[len(base_path):], accept='font/woff2')
+            assert font_code == 200 and font_body.startswith(b'wOF2'), (font_path, font_code)
+        print(f'{len(font_paths)} local WOFF2 fonts verified, with no Google Fonts request.')
 for path in ['/workshop.svg', '/photo-paper.svg', '/photo-brush-mask-subtle.png']:
     assert request(path, accept='*/*')[0] == 200
 print('HTML, JavaScript, CSS and workshop textures verified.')

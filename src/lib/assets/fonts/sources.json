@@ -1,0 +1,50 @@
+{
+  "stylesheet": "https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,0,1;9..144,500,0,1;9..144,600,0,1&display=swap",
+  "files": {
+    "caveat-cyrillic-ext.woff2": {
+      "source": "https://fonts.gstatic.com/s/caveat/v23/Wnz6HAc5bAfYB2Q7azYYmg8.woff2",
+      "sha256": "4956ec7b19798cb8418f2e44349e90c0ab7310594350c4b9c2998dc092122d5a",
+      "bytes": 42856
+    },
+    "caveat-cyrillic.woff2": {
+      "source": "https://fonts.gstatic.com/s/caveat/v23/Wnz6HAc5bAfYB2Q7YjYYmg8.woff2",
+      "sha256": "6276a2f5a5554c16b422f00f114773a8d4013a81df18a338f7c216d80103c9af",
+      "bytes": 77216
+    },
+    "caveat-latin-ext.woff2": {
+      "source": "https://fonts.gstatic.com/s/caveat/v23/Wnz6HAc5bAfYB2Q7aDYYmg8.woff2",
+      "sha256": "f626b95c1efa95cf6b7c9b043d3bbe8862b6abbe5f55a082102f33f7de2fd4f9",
+      "bytes": 29472
+    },
+    "caveat-latin.woff2": {
+      "source": "https://fonts.gstatic.com/s/caveat/v23/Wnz6HAc5bAfYB2Q7ZjYY.woff2",
+      "sha256": "891951df5e8b5b0f0bc760d31375405e795c666b5add70437de12d4a6482b33f",
+      "bytes": 74932
+    },
+    "dm-sans-latin-ext.woff2": {
+      "source": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu6-K6h9Q.woff2",
+      "sha256": "a5d38fe99f930275684999b462c7123faa063d9e44e73b4b241723d884aa0f49",
+      "bytes": 18228
+    },
+    "dm-sans-latin.woff2": {
+      "source": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K4.woff2",
+      "sha256": "9fea608a947e67020c33cad9a6fe3d60c54119dfb8cff87768a8117a15ed7543",
+      "bytes": 36932
+    },
+    "fraunces-vietnamese.woff2": {
+      "source": "https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2WS01xCBTeO-U.woff2",
+      "sha256": "2318622b81b3cd070d25e499b68174fcc78571df93e9870dbd91c91091a6ca69",
+      "bytes": 19812
+    },
+    "fraunces-latin-ext.woff2": {
+      "source": "https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2WS01xCFTeO-U.woff2",
+      "sha256": "ccf422aeab2ae03da76c63c1aa38e9244c2b897fcc9e3e9baef972acd964f8ba",
+      "bytes": 59368
+    },
+    "fraunces-latin.woff2": {
+      "source": "https://fonts.gstatic.com/s/fraunces/v38/6NU78FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2WS01xC9TeA.woff2",
+      "sha256": "42ced9bd5862402676c35705ceb0cc48f68ebe31985f3f9279272fcbbe5e9f16",
+      "bytes": 67176
+    }
+  }
+}

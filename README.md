@@ -11,6 +11,8 @@ npm run build:php
 
 Le dossier `dist-php/` est le paquet à publier. Son chemin public est `/seretiny` par défaut ; définir `SERETINY_BASE_PATH` avant la compilation pour le changer. Les URL de l’interface, des médias et des textures sont adaptées à ce sous-dossier.
 
+Les polices Caveat, DM Sans et Fraunces sont incluses et servies localement dans les deux versions, avec préchargement de Caveat. L’affichage ne dépend pas d’une connexion à Google Fonts ; les licences sont publiées dans `assets/font-licenses/`.
+
 Le serveur doit fournir PHP 8.4 avec PDO SQLite, GD (WebP et AVIF), EXIF, mbstring, OpenSSL et cURL. FFmpeg et ffprobe sont nécessaires aux vidéos ; ils peuvent être installés dans `.private/bin/` sans droits administrateur. Les photos sont limitées à 12 Mo et 24 mégapixels pour respecter la mémoire du mutualisé ; les vidéos à 100 Mo et 10 minutes. `php.ini` demande une limite de 120 Mo par requête, sous réserve des plafonds de l’hébergeur.
 
 La configuration privée se place dans `dist-php/.private/.env` sur le serveur : mêmes secrets que `.env.example`, avec `SITE_URL=https://ton-domaine/seretiny`, un `DATA_DIR` absolu, et les chemins Linux de FFmpeg/ffprobe. Le fichier `.htaccess` fourni interdit l’accès HTTP à `.private/`, `server/` et aux fichiers cachés. Ne pas retirer cette protection. Sélectionner PHP 8.4 dans le panneau de l’hébergeur ; l’application utilise son gestionnaire PHP par défaut.
