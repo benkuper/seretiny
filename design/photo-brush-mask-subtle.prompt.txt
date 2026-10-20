@@ -1,0 +1,7 @@
+Asset: static/photo-brush-mask-subtle.png
+Edit target: static/photo-brush-mask.png
+Generation: built-in image_gen, transparent_background=true.
+Purpose: reduce the depth of the dry-brush perimeter while preserving the style and generated alpha.
+
+Prompt:
+Edit the provided CSS alpha-mask asset. Preserve its realistic handmade broad dry-brush style, landscape 3:2 composition, uniformly solid opaque black interior, genuinely transparent background, and crisp bristle edges. Make ONLY the border treatment less intrusive: compress the rough painted edge band to approximately HALF its current depth on all four sides, while retaining the same natural density and layered quality of the bristle texture within that narrower band. Fill in most of the long deep scratches so they become shorter shallow streaks close to the perimeter. Tame projecting stroke tips and remove the isolated outer splatter dots. The painted rectangle should now occupy slightly more of the canvas, retaining about 2% transparent safety margin. Keep convincing rough dry brush marks, asymmetry and tiny irregularities; do not substitute a clean geometric shape. Interior must remain completely opaque, flat black, with no texture, grey wash, or holes. No blur, no feathering, no translucent halo or fade around the contour. This is a production CSS alpha mask, not a visible black frame. Change only the amplitude and depth of the edge effect. No text or watermark.

@@ -1,0 +1,5 @@
+# Exemple à adapter : le DNS du domaine doit pointer vers le VPS.
+seretiny.example.fr {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3000
+}
