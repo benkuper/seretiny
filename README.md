@@ -1,5 +1,42 @@
 # SereTiny
 
+## Hébergement mutualisé Apache / PHP
+
+Le site dispose aussi d’un backend **PHP 8.4**, utilisable sans Node sur le serveur. La même interface **Svelte 5** est compilée localement ; PHP assure SQLite, l’authentification, les formulaires, les commentaires, les images WebP et Google Photos. Le déploiement Node/Docker reste disponible.
+
+```bash
+npm run check:php
+npm run build:php
+```
+
+Le dossier `dist-php/` est le paquet à publier. Son chemin public est `/seretiny` par défaut ; définir `SERETINY_BASE_PATH` avant la compilation pour le changer. Les URL de l’interface, des médias et des textures sont adaptées à ce sous-dossier.
+
+Le serveur doit fournir PHP 8.4 avec PDO SQLite, GD (WebP et AVIF), EXIF, mbstring, OpenSSL et cURL. FFmpeg et ffprobe sont nécessaires aux vidéos ; ils peuvent être installés dans `.private/bin/` sans droits administrateur. Les photos sont limitées à 12 Mo et 24 mégapixels pour respecter la mémoire du mutualisé ; les vidéos à 100 Mo et 10 minutes. `php.ini` demande une limite de 120 Mo par requête, sous réserve des plafonds de l’hébergeur.
+
+La configuration privée se place dans `dist-php/.private/.env` sur le serveur : mêmes secrets que `.env.example`, avec `SITE_URL=https://ton-domaine/seretiny`, un `DATA_DIR` absolu, et les chemins Linux de FFmpeg/ffprobe. Le fichier `.htaccess` fourni interdit l’accès HTTP à `.private/`, `server/` et aux fichiers cachés. Ne pas retirer cette protection. Sélectionner PHP 8.4 dans le panneau de l’hébergeur ; l’application utilise son gestionnaire PHP par défaut.
+
+Les outils suivants lisent les identifiants du fichier **non versionné** `.vscode/ssh.json` (`host`, `port`, `username`, `password` ou `privateKeyPath`, `remotePath` absolu côté SSH et `siteUrl`). Python et Paramiko sont requis sur le poste de déploiement.
+
+```bash
+# Tests HTTP sur une copie isolée : ne touchent pas la base publique.
+npm run test:php
+
+# Premier déploiement : sauvegarde SQLite cohérente + originaux et dérivés.
+node --env-file-if-exists=.env scripts/export-php-data.mjs
+python scripts/remote-php.py init
+
+# Déployer le paquet compilé, en conservant la configuration et les données.
+python scripts/remote-php.py deploy
+```
+
+`init` préserve une base et un `.env` déjà présents. `deploy` sauvegarde la base SQLite et les fichiers applicatifs dans `.private/backups/`, conserve les anciens assets pour les pages déjà ouvertes, et ne supprime ni photos ni originaux. Les clés SSH connues sont mémorisées localement dans `.vscode/ssh-known-hosts` ; une clé modifiée est refusée.
+
+L’import local propose aujourd’hui, une journée existante, une date libre ou le regroupement par date de prise de vue. La date d’affichage reste indépendante des métadonnées.
+
+Pour Google Photos, ajouter **`https://ton-domaine/seretiny/admin/google-photos/callback`** aux URI autorisées du client OAuth Google. Les accès et la progression sont chiffrés en AES-256-GCM dans une table additive `php_google_flows` (migration `005-php-support`). L’import traite un fichier par requête de suivi : garder l’administration ouverte pour le faire avancer. Fermer la page suspend le traitement ; revenir dans l’atelier le reprend. Aucune synchronisation de photothèque n’est effectuée.
+
+Les tests PHP vérifient connexion et CSRF, transactions, chapitres, import et déplacement, dédoublonnage, visibilité des médias, lecture HTTP Range, commentaires et modération. Les appels Google sont simulés pour vérifier chiffrement, renouvellement, reprise et validation des URL ; l’autorisation réelle nécessite la configuration du client Google.
+
 **Journal de construction immersif d'une tiny house — Svelte 5 + SvelteKit 3.**
 
 Projet personnel autonome, en français (anglais en option), conçu pour un VPS Linux. Les photos s'importent depuis l'ordinateur ou, en option, par sélection directe dans Google Photos. Elles restent stockées sur le VPS ; aucun compte Google n'est requis pour l'import local.

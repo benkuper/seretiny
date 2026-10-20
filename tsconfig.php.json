@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src", "php/client", "vite.php.config.ts"]
+}

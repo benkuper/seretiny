@@ -1,0 +1,8 @@
+Options -Indexes -MultiViews
+RewriteEngine On
+RewriteBase /seretiny/
+DirectoryIndex index.php
+RewriteRule ^(?:server|\.private|\.vite)(?:/|$) - [F,L]
+RewriteRule (^|/)\. - [F,L]
+RewriteRule ^(?:index\.php|assets/|favicon\.svg$|workshop\.svg$|photo-[a-z-]+\.(?:svg|png)$) - [L]
+RewriteRule ^ index.php [END,QSA]

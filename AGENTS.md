@@ -20,6 +20,10 @@ Svelte 5 (runes), SvelteKit 3, TypeScript 6, Node 22.17+, SQLite/better-sqlite3,
 
 ## Repères
 
+- Variante mutualisé PHP : `php/server/` pour le backend, `php/client/` pour le montage des mêmes composants Svelte et les adaptateurs de formulaires. `vite.php.config.ts` adapte les URL au sous-dossier ; `npm run build:php` produit `dist-php/`. Le runtime Node historique reste disponible.
+- Déploiement PHP : `scripts/remote-php.py`, accès local ignoré dans `.vscode/ssh.json`. Ne jamais afficher les mots de passe, ni écraser `.private/.env` ou `.private/data/`. Toujours conserver les règles Apache refusant l’accès HTTP à `server/` et `.private/`.
+- Validation PHP : `npm run check:php`, `npm run test:php` (copie isolée sur l’hébergement). Migration additive `005-php-support` pour la limitation des tentatives et les connexions Google PHP chiffrées. Les données historiques SQLite restent compatibles.
+
 - `src/routes/+page.svelte` : public ; timeline, animations, langue, boîte de commentaires.
 - `src/routes/admin/+page.svelte` : formulaires d'édition en actions SvelteKit natives.
 - `src/routes/admin/+page.server.ts` : actions sécurisées pour créer/éditer/supprimer/importer/modérer.

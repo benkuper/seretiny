@@ -1,10 +1,12 @@
 node_modules
 .svelte-kit
 build
+dist-php
 .env
 .env.*
 !.env.example
 .DS_Store
 .vscode/sftp.json
 .vscode/ssh.json
+.vscode/ssh-known-hosts
 /data/

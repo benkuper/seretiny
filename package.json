@@ -13,6 +13,9 @@
   "scripts": {
     "dev": "vite dev --host 0.0.0.0",
     "build": "vite build",
+    "build:php": "node scripts/build-php.mjs",
+    "check:php": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.php.json",
+    "test:php": "npm run build:php && node --env-file-if-exists=.env scripts/php-fixtures.mjs && python scripts/remote-php.py validate",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "npm run build && node --test tests/*.test.mjs",
