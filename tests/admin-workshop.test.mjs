@@ -94,7 +94,7 @@ test('menu opens focused views and existing day links still open the editor', as
     assert.match(card, /action="\?\/deletePhoto&amp;view=photos"/);
     assert.doesNotMatch(card, /first\.jpg|second\.jpg|third\.jpg|Affichage activé|Masquée|Modifier les détails ↗/);
   }
-  assert.match(library, /<dialog[^>]*aria-label="Photo en grand"/);
+  assert.match(library, /<dialog[^>]*aria-label="Aperçu du média"/);
   assert.doesNotMatch(await html('?view=photos'), /name="body_fr"/);
   assert.match(await html('?view=chapters'), /class="chapter-card[ "]/);
   assert.match(await html('?view=imports'), /id="google-import-title"/);

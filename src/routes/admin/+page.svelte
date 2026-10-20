@@ -4,6 +4,7 @@
   import { invalidateAll } from '$app/navigation';
   import { tick } from 'svelte';
   import LibraryPhoto from '#lib/components/admin/LibraryPhoto.svelte';
+  import MediaVideo from '#lib/components/MediaVideo.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
   let selected = $derived(data.days.find((day) => day.id === data.selectedId));
@@ -22,11 +23,12 @@
   let changeDate = $state(false);
   let changeCaptionFr = $state(false);
   let changeCaptionEn = $state(false);
-  let preview = $state<{id: string; caption: string} | null>(null);
+  let importDestination = $state('');
+  let preview = $state<{id: string; caption: string; kind: 'photo' | 'video'} | null>(null);
   let previewDialog: HTMLDialogElement;
 
-  async function openPreview(id: string, caption: string) {
-    preview = {id, caption};
+  async function openPreview(id: string, caption: string, kind: 'photo' | 'video') {
+    preview = {id, caption, kind};
     await tick();
     previewDialog.showModal();
   }
@@ -145,7 +147,7 @@
           <a href="/admin?view={item.id}" class:active aria-current={active ? 'page' : undefined}><span class="menu-icon" aria-hidden="true">{item.icon}</span><span><strong>{item.title}</strong><small>{item.hint}</small></span>{#if item.id === 'comments' && data.comments.length}<b class="menu-count">{data.comments.length}</b>{/if}</a>
         {/each}
       </nav>
-      <div class="statistics"><div><strong>{data.days.length}</strong><span>journées</span></div><div><strong>{photoCount}</strong><span>photos</span></div><div><strong>{publishedCount}</strong><span>affichées</span></div></div>
+      <div class="statistics"><div><strong>{data.days.length}</strong><span>journées</span></div><div><strong>{photoCount}</strong><span>médias</span></div><div><strong>{publishedCount}</strong><span>affichées</span></div></div>
       <p class="sidebar-note">Le carnet du chantier, à ton rythme.</p>
     </aside>
     <main class="workspace" id="workspace">
@@ -153,7 +155,7 @@
       {#if data.warning}<p class="notice error" role="alert">{data.warning}</p>{/if}
       {#if form?.message}<p class="notice error" role="alert">{form.message}</p>{/if}
       {#if data.view === 'days' || data.view === 'photos'}
-        <div class="workspace-heading"><div><span class="eyebrow">LE JOURNAL / {data.view === 'days' ? 'RÉCITS' : 'IMAGES'}</span><h2>{data.view === 'days' ? 'Les journées' : 'La photothèque'}</h2><p>{data.view === 'days' ? 'Ouvre une journée pour raconter son histoire, ou gère la publication en lot.' : 'Retrouve tes images et modifie plusieurs dates ou légendes à la fois.'}</p></div><a class="secondary" href="/admin?view=imports">＋ Importer des photos</a></div>
+        <div class="workspace-heading"><div><span class="eyebrow">LE JOURNAL / {data.view === 'days' ? 'RÉCITS' : 'IMAGES'}</span><h2>{data.view === 'days' ? 'Les journées' : 'La photothèque'}</h2><p>{data.view === 'days' ? 'Ouvre une journée pour raconter son histoire, ou gère la publication en lot.' : 'Retrouve tes images et modifie plusieurs dates ou légendes à la fois.'}</p></div><a class="secondary" href="/admin?view=imports">＋ Importer des photos ou vidéos</a></div>
         {#if data.view === 'days'}
           <details class="create-day paper"><summary>＋ Créer une journée</summary><form method="POST" action="?/createDay&view=days" class="create-day-form"><label>Date<input name="date" type="date" value={todayLocal()} required /></label><label>Titre français<input name="title_fr" maxlength="150" placeholder="Les premières découpes…" required /></label><button class="primary" type="submit">Créer la journée ↗</button></form><small>Le chapitre est déterminé automatiquement par la date.</small></details>
         {/if}
@@ -164,8 +166,8 @@
           <label>Du<input type="date" bind:value={fromDate} /></label><label>Au<input type="date" bind:value={toDate} /></label>
           <button class="text-button" type="button" onclick={() => {search = ''; chapterFilter = 'all'; statusFilter = 'all'; fromDate = ''; toDate = '';}}>Réinitialiser</button>
         </div>
-        <div class="results-heading"><span role="status">{total} {data.view === 'days' ? 'journée(s)' : 'photo(s)'} · {selectedIds.length} sélectionné(s)</span>{#if data.view === 'photos'}<div class="view-switch" role="group" aria-label="Présentation des photos"><button type="button" class:active={photoLayout === 'grid'} aria-pressed={photoLayout === 'grid'} onclick={() => photoLayout = 'grid'}>Grille</button><button type="button" class:active={photoLayout === 'list'} aria-pressed={photoLayout === 'list'} onclick={() => photoLayout = 'list'}>Liste</button></div>{/if}</div>
-        {#if data.view === 'photos'}<p class="library-help">Photos classées par date de prise de vue, de la plus ancienne à la plus récente. Clique sur une légende ou une date pour la modifier, ou sur l’image pour l’agrandir.</p>{/if}
+        <div class="results-heading"><span role="status">{total} {data.view === 'days' ? 'journée(s)' : 'média(s)'} · {selectedIds.length} sélectionné(s)</span>{#if data.view === 'photos'}<div class="view-switch" role="group" aria-label="Présentation des photos"><button type="button" class:active={photoLayout === 'grid'} aria-pressed={photoLayout === 'grid'} onclick={() => photoLayout = 'grid'}>Grille</button><button type="button" class:active={photoLayout === 'list'} aria-pressed={photoLayout === 'list'} onclick={() => photoLayout = 'list'}>Liste</button></div>{/if}</div>
+        {#if data.view === 'photos'}<p class="library-help">Photos et vidéos classées par date de prise de vue, de la plus ancienne à la plus récente. Clique sur une légende ou une date pour la modifier, ou sur l’image pour l’agrandir.</p>{/if}
         <div class="bulk-bar">
           <label class="selection-label"><input type="checkbox" checked={allVisibleSelected} indeterminate={!allVisibleSelected && visibleIds.some(id => selectedIds.includes(id))} disabled={!visibleIds.length} onchange={(event) => selectVisible(event.currentTarget.checked)} /> Sélectionner cette page</label>
           {#if selectedIds.length}<button class="text-button" type="button" onclick={() => { selectedDays = []; selectedPhotos = []; }}>Désélectionner tout</button>{/if}
@@ -174,15 +176,15 @@
         {#if data.view === 'days'}
           <div class="day-table" role="region" aria-label="Liste des journées"><table><thead><tr><th><span class="sr-only">Sélection</span></th><th>Journée</th><th>Chapitre</th><th>Photos</th><th>Affichage</th><th><span class="sr-only">Édition</span></th></tr></thead><tbody>{#each visibleDays as day (day.id)}<tr><td><input type="checkbox" value={String(day.id)} bind:group={selectedDays} aria-label="Sélectionner {day.title_fr}, {frenchDate(day.date)}" /></td><td><a class="day-title" href="/admin?day={day.id}">{#if day.photos[0]}<img src="/media/{day.photos[0].id}/thumb" alt="" loading="lazy" />{/if}<span><strong>{day.title_fr || 'Journée sans titre'}</strong><small>{frenchDate(day.date)}</small></span></a></td><td>{day.chapter_fr || 'Sans chapitre'}</td><td>{day.photos.length}</td><td><span class="row-status" class:live={!!day.published && !!day.photos.length}>{day.published ? day.photos.length ? 'En ligne' : 'Sans photos' : 'Masquée'}</span></td><td><a class="edit-link" href="/admin?day={day.id}" aria-label="Modifier {day.title_fr}">Modifier ↗</a></td></tr>{/each}</tbody></table></div>
         {:else}
-          <details class="paper batch-editor" open={selectedPhotos.length > 0}><summary>Modifier les photos sélectionnées ({selectedPhotos.length})</summary><p>Seuls les champs cochés seront appliqués à toute la sélection. Une légende vide cochée efface la légende existante.</p><form method="POST" action="?/bulkPhotos&view=photos" onsubmit={(event) => { if (!window.confirm(`Appliquer ces modifications aux ${selectedPhotos.length} photos sélectionnées ?`)) event.preventDefault(); }}>
+          <details class="paper batch-editor" open={selectedPhotos.length > 0}><summary>Modifier les médias sélectionnés ({selectedPhotos.length})</summary><p>Seuls les champs cochés seront appliqués à toute la sélection. Une légende vide cochée efface la légende existante.</p><form method="POST" action="?/bulkPhotos&view=photos" onsubmit={(event) => { if (!window.confirm(`Appliquer ces modifications aux ${selectedPhotos.length} photos sélectionnées ?`)) event.preventDefault(); }}>
             {#each selectedPhotos as id}<input name="ids" type="hidden" value={id} />{/each}
-            <div class="fields two"><div><label class="selection-label"><input name="change_date" type="checkbox" bind:checked={changeDate} /> Modifier la date d’affichage</label><label><span class="sr-only">Nouvelle date d’affichage</span><input name="date" type="date" disabled={!changeDate} required={changeDate} /></label><p>Une nouvelle date crée une journée avec affichage activé. Les photos déplacées vers une journée publiée deviennent visibles ; les anciennes journées et leurs récits sont conservés.</p></div><div><label class="selection-label"><input name="change_caption_fr" type="checkbox" bind:checked={changeCaptionFr} /> Remplacer la légende française</label><label><span class="sr-only">Légende française commune</span><textarea name="caption_fr" rows="2" maxlength="500" disabled={!changeCaptionFr}></textarea></label><label class="selection-label"><input name="change_caption_en" type="checkbox" bind:checked={changeCaptionEn} /> Remplacer la légende anglaise</label><label><span class="sr-only">Légende anglaise commune</span><textarea name="caption_en" rows="2" maxlength="500" disabled={!changeCaptionEn}></textarea></label></div></div><button class="primary" disabled={!selectedPhotos.length || (!changeDate && !changeCaptionFr && !changeCaptionEn)}>Appliquer à {selectedPhotos.length} photo(s) ↗</button>
+            <div class="fields two"><div><label class="selection-label"><input name="change_date" type="checkbox" bind:checked={changeDate} /> Modifier la date d’affichage</label><label><span class="sr-only">Nouvelle date d’affichage</span><input name="date" type="date" disabled={!changeDate} required={changeDate} /></label><p>Une nouvelle date crée une journée avec affichage activé. Les photos déplacées vers une journée publiée deviennent visibles ; les anciennes journées et leurs récits sont conservés.</p></div><div><label class="selection-label"><input name="change_caption_fr" type="checkbox" bind:checked={changeCaptionFr} /> Remplacer la légende française</label><label><span class="sr-only">Légende française commune</span><textarea name="caption_fr" rows="2" maxlength="500" disabled={!changeCaptionFr}></textarea></label><label class="selection-label"><input name="change_caption_en" type="checkbox" bind:checked={changeCaptionEn} /> Remplacer la légende anglaise</label><label><span class="sr-only">Légende anglaise commune</span><textarea name="caption_en" rows="2" maxlength="500" disabled={!changeCaptionEn}></textarea></label></div></div><button class="primary" disabled={!selectedPhotos.length || (!changeDate && !changeCaptionFr && !changeCaptionEn)}>Appliquer à {selectedPhotos.length} média(s) ↗</button>
           </form></details>
           <div class="library" class:list={photoLayout === 'list'}>
             {#each visiblePhotos as photo (photo.id)}
               <LibraryPhoto {photo} date={photo.day.date} dayId={photo.day.id} selected={selectedPhotos.includes(photo.id)} list={photoLayout === 'list'}
                 onselect={(checked) => selectedPhotos = checked ? [...selectedPhotos, photo.id] : selectedPhotos.filter(id => id !== photo.id)}
-                onpreview={() => openPreview(photo.id, photo.caption_fr)} />
+                onpreview={() => openPreview(photo.id, photo.caption_fr, photo.kind)} />
             {/each}
           </div>
         {/if}
@@ -190,15 +192,15 @@
         {#if pageCount > 1}<nav class="pagination" aria-label="Pages de résultats"><button class="outline-button" disabled={currentPage === 1} onclick={() => page = currentPage - 1}>← Précédent</button><span role="status">Page {currentPage} / {pageCount}</span><button class="outline-button" disabled={currentPage === pageCount} onclick={() => page = currentPage + 1}>Suivant →</button></nav>{/if}
       {/if}
       {#if data.view === 'imports'}
-        <div class="workspace-heading"><div><span class="eyebrow">AGRANDIR LE JOURNAL</span><h2>Importer des photos</h2><p>Choisis tes images, puis retrouve-les dans les journées et la photothèque.</p></div></div>
+        <div class="workspace-heading"><div><span class="eyebrow">AGRANDIR LE JOURNAL</span><h2>Importer des photos et vidéos</h2><p>Choisis tes photos et vidéos, puis retrouve-les dans les journées et la photothèque.</p></div></div>
       <section class="paper" aria-labelledby="google-import-title">
-        <div class="paper-heading"><span class="number" aria-hidden="true">G</span><div><h3 id="google-import-title">Depuis Google Photos</h3><p>Sélectionne tes photos, jusqu'à 2 000 éléments par sélection Google. Les journées sont créées par date de prise de vue et les photos déjà importées sont ignorées.</p></div></div>
+        <div class="paper-heading"><span class="number" aria-hidden="true">G</span><div><h3 id="google-import-title">Depuis Google Photos</h3><p>Sélectionne tes photos et vidéos, jusqu'à 2 000 éléments par sélection Google. Les journées sont créées par date de prise de vue et les photos déjà importées sont ignorées.</p></div></div>
         {#if shownGoogleProgress}
           {@const progress = shownGoogleProgress}
           <div class="google-progress" aria-busy={progress.status === 'running'}>
             <p role="status">{progress.status === 'running' ? (progress.total ? `Import en cours : ${progress.processed} / ${progress.total} éléments traités.` : 'Lecture de la sélection Google Photos…') : progress.status === 'failed' ? 'Import interrompu.' : 'Import terminé.'}</p>
             <progress max={progress.total || 1} value={progress.processed} aria-label="Progression de l’import Google Photos"></progress>
-            <p>{progress.imported} photo(s) importée(s), {progress.created} journée(s) créée(s) avec affichage activé, {progress.duplicates} doublon(s) ignoré(s), {progress.failed} erreur(s).</p>
+            <p>{progress.imported} média(s) importé(s), {progress.created} journée(s) créée(s) avec affichage activé, {progress.duplicates} doublon(s) ignoré(s), {progress.failed} erreur(s).</p>
             {#if progress.selectedId && progress.status !== 'running'}<a href="/admin?day={progress.selectedId}">Voir les journées importées ↗</a>{/if}
             {#if progress.message}<p class="notice error" role="alert">{progress.message}</p>{/if}
             {#if progress.errors.length}
@@ -214,7 +216,7 @@
           <form method="POST" action="?/connectGooglePhotos&view=imports"><button class="primary" type="submit">Choisir dans Google Photos <span aria-hidden="true">↗</span></button></form>
           {#if data.googlePhotos.connected}<div class="save-bar"><form method="POST" action="?/switchGooglePhotos&view=imports"><button class="secondary" type="submit">Changer de compte Google</button></form><form method="POST" action="?/disconnectGooglePhotos&view=imports"><button class="secondary" type="submit">Déconnecter Google Photos</button></form></div>{/if}
         {:else}
-          <div class="upload-box"><div><strong>1. Sélectionner les photos dans Google</strong><p>Valide ta sélection dans Google Photos, puis reviens ici. Les vidéos ne sont pas importées.</p></div><a class="secondary" href={data.googlePhotos.pickerUri} target="_blank" rel="noopener noreferrer">Ouvrir Google Photos ↗</a></div>
+          <div class="upload-box"><div><strong>1. Sélectionner les photos et vidéos dans Google</strong><p>Valide ta sélection dans Google Photos, puis reviens ici.</p></div><a class="secondary" href={data.googlePhotos.pickerUri} target="_blank" rel="noopener noreferrer">Ouvrir Google Photos ↗</a></div>
           <p class="nothing-photo" role="status">{googleFeedback || (googleReady ? 'Sélection prête à importer.' : 'En attente de ta sélection dans Google Photos…')}</p>
           <form method="POST" action="?/importGooglePhotos&view=imports">
             <div class="fields two">
@@ -227,16 +229,27 @@
         {/if}
       </section>
       <section class="paper" aria-labelledby="auto-import-title">
-        <div class="paper-heading"><span class="number" aria-hidden="true">＋</span><div><h3 id="auto-import-title">Des photos aux journées</h3><p>Les photos sont regroupées par date de prise de vue (EXIF). Les nouvelles journées sont visibles sur le site dès l’import des photos. Les fichiers déjà importés sont ignorés.</p></div></div>
+        <div class="paper-heading"><span class="number" aria-hidden="true">＋</span><div><h3 id="auto-import-title">Depuis tes fichiers</h3><p>Ajoute tes fichiers à aujourd’hui, à une journée existante ou à une date de ton choix. Les nouvelles journées sont visibles sur le site dès l’import. Les fichiers déjà importés sont ignorés.</p></div></div>
         <form method="POST" action="?/importPhotos&view=imports" enctype="multipart/form-data">
           <div class="upload-box">
-            <div><strong>Importer plusieurs journées à la fois</strong><p id="auto-import-help">1 à 8 photos, JPG, PNG, WebP ou AVIF, 12 Mo par image. Les journées existantes sont réutilisées ; si elles sont publiées, les nouvelles photos seront visibles.</p></div>
-            <input name="photos" aria-label="Photos à regrouper par date de prise de vue" aria-describedby="auto-import-help" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple required />
+            <div><strong>Importer des photos et vidéos</strong><p id="auto-import-help">1 à 8 fichiers : JPG, PNG, WebP ou AVIF (12 Mo par photo), MP4, MOV ou WebM (100 Mo et 10 minutes par vidéo). Maximum 120 Mo par envoi. Les journées existantes sont réutilisées ; si elles sont publiées, les nouveaux médias seront visibles.</p></div>
+            <input name="photos" aria-label="Sélectionner les photos et vidéos à importer" aria-describedby="auto-import-help" type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/quicktime,video/webm,.mov,.m4v" multiple required />
           </div>
           <div class="fields two">
-            <label>Date de remplacement <small>(si la photo n'a pas de date EXIF)</small><input name="fallback_date" type="date" aria-describedby="fallback-help" /><small id="fallback-help">Facultative. Sans cette date, les photos sans date de prise de vue ne sont pas importées et sont signalées.</small></label>
+            <label>Journée d’affichage
+              <select name="destination" bind:value={importDestination}>
+                <option value="">Aujourd’hui ou une date libre</option>
+                {#if data.days.length}<optgroup label="Journées existantes">{#each [...data.days].reverse() as day (day.id)}<option value={day.date}>{frenchDate(day.date)} · {day.title_fr || 'Journée sans titre'}</option>{/each}</optgroup>{/if}
+                <option value="capture">Regrouper par date de prise de vue</option>
+              </select>
+            </label>
+            {#if importDestination === ''}
+              <label>Date <small>(facultative)</small><input name="date" type="date" aria-describedby="import-date-help" /><small id="import-date-help">Laisse vide pour utiliser ou créer la journée d’aujourd’hui. Cette date s’applique à tous les fichiers, quelle que soit leur date de prise de vue.</small></label>
+            {:else if importDestination === 'capture'}
+              <label>Date de remplacement <small>(si le média n’a pas de date de prise de vue)</small><input name="fallback_date" type="date" aria-describedby="fallback-help" /><small id="fallback-help">Sans date de remplacement, les fichiers sans date de prise de vue sont signalés et ne sont pas importés.</small></label>
+            {/if}
           </div>
-          <button class="primary" type="submit">Importer et créer les journées <span aria-hidden="true">↗</span></button>
+          <button class="primary" type="submit">Importer les fichiers <span aria-hidden="true">↗</span></button>
         </form>
       </section>
       {/if}
@@ -255,30 +268,30 @@
         </form>
 
         <section class="paper photo-section">
-        <div class="paper-heading"><span class="number">02</span><div><h3>Les photos</h3><p>Ajoute jusqu'à 8 photos à la fois. Formats JPG, PNG, WebP et AVIF (12 Mo par image). Les photos sont classées automatiquement par date de prise de vue.</p></div></div>
+        <div class="paper-heading"><span class="number">02</span><div><h3>Les photos et vidéos</h3><p>Jusqu'à 8 fichiers : JPG, PNG, WebP et AVIF (12 Mo par photo), MP4, MOV et WebM (100 Mo et 10 minutes par vidéo). Maximum 120 Mo par envoi. Tri automatique par date de prise de vue.</p></div></div>
           <form method="POST" action="?/upload&view=day&day={selected.id}" enctype="multipart/form-data" class="upload-box">
             <input type="hidden" name="day_id" value={selected.id} />
             <span class="upload-symbol">＋</span>
-            <div><strong>Importer depuis l'ordinateur ou le téléphone</strong><p>Choisis tes images, puis écris leurs légendes ci-dessous.</p></div>
-            <input name="photos" aria-label="Sélectionner les photos" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple required />
-            <button class="secondary" type="submit">Importer les photos</button>
+            <div><strong>Importer depuis l'ordinateur ou le téléphone</strong><p>Choisis tes photos et vidéos, puis écris leurs légendes ci-dessous.</p></div>
+            <input name="photos" aria-label="Sélectionner les photos et vidéos" type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/quicktime,video/webm,.mov,.m4v" multiple required />
+            <button class="secondary" type="submit">Importer les fichiers</button>
           </form>
           {#if selected.photos.length}
             <div class="photo-list">
               {#each selected.photos as photo,i (photo.id)}
                 <article class="photo-card" id="photo-{photo.id}">
-                  <img class="photo-preview" src="/media/{photo.id}/thumb" alt={photo.caption_fr || `Image ${i+1}`} loading="lazy" />
+                  <button class="photo-preview-button" type="button" onclick={() => openPreview(photo.id, photo.caption_fr, photo.kind)} aria-label="Agrandir {photo.kind === 'video' ? 'la vidéo' : 'la photo'} {i+1}"><img class="photo-preview" src="/media/{photo.id}/thumb" alt={photo.caption_fr || `Image ${i+1}`} loading="lazy" />{#if photo.kind === 'video'}<span class="video-label">▶ Vidéo</span>{/if}</button>
                   <div class="photo-fields">
-                    <div class="photo-title"><strong>PHOTO {String(i+1).padStart(2, '0')}</strong><small>{photo.original_name}</small></div>
+                    <div class="photo-title"><strong>{photo.kind === 'video' ? 'VIDÉO' : 'PHOTO'} {String(i+1).padStart(2, '0')}</strong><small>{photo.original_name}</small></div>
                     <form method="POST" action="?/savePhoto&view=day&day={selected.id}">
                       <input type="hidden" name="id" value={photo.id} /><input type="hidden" name="return_to" value={selected.id} />
                       <label>Date d'affichage <input name="date" type="date" value={selected.date} required /></label>
                       <label class="wide">Légende française<textarea name="caption_fr" rows="2" maxlength="500" placeholder="Une courte histoire derrière la photo…">{photo.caption_fr}</textarea></label>
                       <label class="wide">Caption in English <small>(facultatif)</small><textarea name="caption_en" rows="2" maxlength="500" placeholder="A little story behind this photo…">{photo.caption_en}</textarea></label>
-                      <button class="secondary save-photo" type="submit">Enregistrer cette photo ↗</button>
+                      <button class="secondary save-photo" type="submit">Enregistrer ce média ↗</button>
                     </form>
-                    <form method="POST" action="?/deletePhoto&view=day&day={selected.id}" class="delete-photo" onsubmit={(event) => confirmDelete(event,'cette photo')}>
-                      <input type="hidden" name="id" value={photo.id} /><input type="hidden" name="day_id" value={selected.id} /><button type="submit">Supprimer la photo</button>
+                    <form method="POST" action="?/deletePhoto&view=day&day={selected.id}" class="delete-photo" onsubmit={(event) => confirmDelete(event,'ce média')}>
+                      <input type="hidden" name="id" value={photo.id} /><input type="hidden" name="day_id" value={selected.id} /><button type="submit">Supprimer le média</button>
                     </form>
                   </div>
                 </article>
@@ -338,12 +351,17 @@
   </div>
 </div>
 
-<dialog class="photo-lightbox" bind:this={previewDialog} onclose={() => preview = null} aria-label="Photo en grand">
+<dialog class="photo-lightbox" bind:this={previewDialog} onclose={() => preview = null} aria-label="Aperçu du média">
   <button class="close-preview" type="button" onclick={() => previewDialog.close()} aria-label="Fermer l’aperçu">×</button>
-  {#if preview}<img src="/media/{preview.id}/large" alt={preview.caption || 'Photo du chantier en grand'} />{#if preview.caption}<p>{preview.caption}</p>{/if}{/if}
+  {#if preview}
+    {#if preview.kind === 'video'}<div class="preview-video"><MediaVideo id={preview.id} label={preview.caption || 'Vidéo du chantier'} /></div>
+    {:else}<img src="/media/{preview.id}/large" alt={preview.caption || 'Photo du chantier en grand'} />{/if}
+    {#if preview.caption}<p>{preview.caption}</p>{/if}
+  {/if}
 </dialog>
 
 <style>
+  .preview-video{height:min(78dvh,950px);width:100%}.photo-preview-button{position:relative;padding:0;border:0;cursor:pointer;background:#c9bba9}.video-label{position:absolute;left:10px;bottom:10px;padding:5px 8px;background:#211b17db;color:#fff7e9;font-size:11px;pointer-events:none}
   .library-help{font-size:11px;color:#876e56;line-height:1.6;margin:0 0 15px}.photo-lightbox{position:fixed;inset:0;width:min(1200px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:20px;border:1px solid #76614f;background:#211b17;color:#f4e8d7;overflow-y:auto;box-shadow:0 24px 100px #0008}.photo-lightbox::backdrop{background:#160f0be8;backdrop-filter:blur(6px)}.photo-lightbox img{display:block;max-width:100%;width:100%;height:min(78dvh,950px);object-fit:contain}.photo-lightbox p{margin:15px 45px 0 0;font-size:14px;line-height:1.6;white-space:pre-wrap}.close-preview{position:sticky;float:right;top:0;width:38px;height:38px;border:1px solid #b39575;background:#34281f;color:#f4e8d7;font-size:26px;z-index:1}.workspace .additional{margin-top:0}
   @media(max-width:700px){.sidebar .statistics{display:none}.photo-lightbox{padding:12px}.photo-lightbox img{height:72dvh}}
   .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

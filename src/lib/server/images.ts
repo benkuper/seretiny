@@ -73,7 +73,9 @@ export async function processPhoto(file: File, { requireCaptureDate = false } = 
   let info: sharp.Metadata;
   try { info = await sharp(buffer, {limitInputPixels: 70_000_000}).metadata(); }
   catch { throw new Error('Fichier image invalide.'); }
-  if (!info.format || !FORMATS.has(info.format)) {
+  // libvips reports AVIF as HEIF with AV1 compression; HEIC stays unsupported.
+  const format = info.format === 'heif' && info.compression === 'av1' ? 'avif' : info.format;
+  if (!format || !FORMATS.has(format)) {
     throw new Error('Format non pris en charge. Utilise JPG, PNG, WebP ou AVIF.');
   }
   const taken_at = captureTime(info.exif);
@@ -82,7 +84,7 @@ export async function processPhoto(file: File, { requireCaptureDate = false } = 
     throw new Error('Date de prise de vue absente ou illisible. Choisis une date de remplacement pour cette image.');
   }
   const id = randomUUID();
-  const source = join(ORIGINALS_DIR, `${id}.${info.format}`);
+  const source = join(ORIGINALS_DIR, `${id}.${format}`);
   const large = join(MEDIA_DIR, `${id}.webp`);
   const small = join(MEDIA_DIR, `${id}_sm.webp`);
   try {

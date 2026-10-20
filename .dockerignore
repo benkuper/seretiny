@@ -4,5 +4,6 @@ build
 data
 .env
 .git
+.vscode
 .DS_Store
 *.log

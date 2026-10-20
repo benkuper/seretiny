@@ -10,6 +10,7 @@ import {
 } from '#lib/server/db.js';
 import { deletePhotoFiles, indexExistingTakenDates } from '#lib/server/images.js';
 import { processMedia } from '#lib/server/videos.js';
+import { localTakenAt } from '#lib/server/media-dates.js';
 import type { Photo } from '#lib/types.js';
 import { beginGooglePhotos, clearGooglePhotos, googlePhotosView, startGoogleSelection,
   downloadGooglePhoto, googlePhotoDate, googlePhotoTakenAt } from '#lib/server/google-photos.js';
@@ -101,7 +102,7 @@ export const actions: Actions = {
       bulkEditPhotos(ids, change);
       count = ids.length;
     } catch (error) { return fail(400, {message: error instanceof Error ? error.message : 'Modification impossible.'}); }
-    back(undefined, `${count} photo(s) modifiée(s).`, undefined, 'photos');
+    back(undefined, `${count} média(s) modifié(s).`, undefined, 'photos');
   },
   bulkComments: async (event) => {
     requireAuth(event);
@@ -180,9 +181,12 @@ export const actions: Actions = {
     requireAuth(event);
     const fd = await event.request.formData();
     const uploaded = fd.getAll('photos').filter((item): item is File => item instanceof File && item.size > 0);
-    if (uploaded.length < 1 || uploaded.length > 8) return fail(400,{message:'Choisis entre 1 et 8 photos à la fois.'});
-    const fallbackDate = field(fd,'fallback_date',10);
-    if (fallbackDate && !dateValid(fallbackDate)) return fail(400,{message:'Choisis une date de remplacement valide.'});
+    if (uploaded.length < 1 || uploaded.length > 8) return fail(400,{message:'Choisis entre 1 et 8 fichiers à la fois.'});
+    const destination = field(fd, 'destination');
+    const byCaptureDate = destination === 'capture';
+    const requestedDate = destination && !byCaptureDate ? destination : field(fd, byCaptureDate ? 'fallback_date' : 'date');
+    if (requestedDate && !dateValid(requestedDate)) return fail(400,{message:'Choisis une date valide.'});
+    const targetDate = requestedDate || (byCaptureDate ? '' : localTakenAt(new Date().toISOString())!.slice(0, 10));
     let imported = 0;
     let duplicates = 0;
     let created = 0;
@@ -192,9 +196,9 @@ export const actions: Actions = {
     const errors: string[] = [];
     for (const photo of uploaded) {
       try {
-        const result = await processMedia(photo, {requireCaptureDate: !fallbackDate});
+        const result = await processMedia(photo, {requireCaptureDate: byCaptureDate && !targetDate});
         try {
-          const target = insertPhotoForDate(result, result.capture_date || fallbackDate,
+          const target = insertPhotoForDate(result, (byCaptureDate && result.capture_date) || targetDate,
             [{source: 'sha256', source_id: result.content_hash}]);
           selectedId ??= target.dayId;
           dayIds.add(target.dayId);
@@ -204,16 +208,16 @@ export const actions: Actions = {
           throw error;
         }
         imported++;
-        if (!result.capture_date) fallbackCount++;
+        if (byCaptureDate && !result.capture_date) fallbackCount++;
       } catch (error) {
         if (error instanceof DuplicatePhotoError) { duplicates++; continue; }
         errors.push(`« ${photo.name.slice(0,100)} » : ${error instanceof Error ? error.message : 'Import impossible.'}`);
       }
     }
-    if (!imported && !duplicates) return fail(400,{message:`Aucune photo importée. ${errors.join(' ')}`});
-    const summary = `${imported} photo(s) importée(s) dans ${dayIds.size} journée(s), dont ${created} nouvelle(s) avec affichage activé. ${duplicates} doublon(s) ignoré(s).`;
-    back(selectedId, summary + (fallbackCount ? ` Date de remplacement utilisée pour ${fallbackCount} photo(s).` : ''),
-      errors.length ? `${errors.length} photo(s) non importée(s). Réessaie uniquement ces images. ${errors.join(' ')}` : undefined);
+    if (!imported && !duplicates) return fail(400,{message:`Aucun média importé. ${errors.join(' ')}`});
+    const summary = `${imported} média(s) importé(s) dans ${dayIds.size} journée(s), dont ${created} nouvelle(s) avec affichage activé. ${duplicates} doublon(s) ignoré(s).`;
+    back(selectedId, summary + (fallbackCount ? ` Date de remplacement utilisée pour ${fallbackCount} média(s).` : ''),
+      errors.length ? `${errors.length} média(s) non importé(s). Réessaie uniquement ces fichiers. ${errors.join(' ')}` : undefined);
   },
   createDay: async (event) => {
     requireAuth(event);
@@ -224,7 +228,7 @@ export const actions: Actions = {
     try {
       id = createDay(date,field(fd,'title_fr',150)||'Une journée à raconter');
     } catch { return fail(400,{message:'Une journée existe déjà à cette date.'}); }
-    back(id,'Journée créée. Elle sera visible sur le site dès l’ajout de photos.');
+    back(id,'Journée créée. Elle sera visible sur le site dès l’ajout de photos ou vidéos.');
   },
   saveDay: async (event) => {
     requireAuth(event);
@@ -247,7 +251,7 @@ export const actions: Actions = {
     const dayId = positiveId(fd,'day_id');
     if (!getDay(dayId)) return fail(404,{message:'Journée introuvable.'});
     const uploaded = fd.getAll('photos').filter((item): item is File => item instanceof File && item.size>0);
-    if (uploaded.length < 1 || uploaded.length > 8) return fail(400,{message:'Choisis entre 1 et 8 photos à la fois.'});
+    if (uploaded.length < 1 || uploaded.length > 8) return fail(400,{message:'Choisis entre 1 et 8 fichiers à la fois.'});
     let imported = 0;
     let duplicates = 0;
     for (const photo of uploaded) {
@@ -262,10 +266,10 @@ export const actions: Actions = {
         imported++;
       } catch(error) {
         if (error instanceof DuplicatePhotoError) { duplicates++; continue; }
-        return fail(400,{message:`${imported} photo(s) importée(s), puis erreur sur « ${photo.name} » : ${error instanceof Error?error.message:'Format invalide'}. Recharge la page.`});
+        return fail(400,{message:`${imported} média(s) importé(s), puis erreur sur « ${photo.name} » : ${error instanceof Error?error.message:'Format invalide'}. Recharge la page.`});
       }
     }
-    back(dayId,`${imported} photo(s) importée(s), ${duplicates} doublon(s) ignoré(s). Tu peux maintenant ajouter leurs légendes.`);
+    back(dayId,`${imported} média(s) importé(s), ${duplicates} doublon(s) ignoré(s). Tu peux maintenant ajouter leurs légendes.`);
   },
   savePhoto: async (event) => {
     requireAuth(event);

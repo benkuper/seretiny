@@ -3,6 +3,7 @@
   import { fade, fly } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import type { Chapter, Day, Language } from '#lib/types.js';
+  import MediaVideo from '#lib/components/MediaVideo.svelte';
 
   let { data }: { data: { days: Day[]; chapters: Chapter[] } } = $props();
   let language = $state<Language>('fr');
@@ -44,9 +45,9 @@
       moderation: 'Les commentaires apparaissent après validation.', noComments: 'Sois le premier à laisser un mot.',
       sent: 'Merci ! Ton commentaire sera visible après validation.',
       next: 'Journée suivante', previous: 'Journée précédente', story: 'Le récit du jour',
-      chapter: 'chapitre', photoCaption: 'Légende', picture: 'Photo', phase: 'Sans chapitre',
+      chapter: 'chapitre', photoCaption: 'Légende', picture: 'Photo', video: 'Vidéo', phase: 'Sans chapitre',
       captionFallback: 'Un instant de la construction',
-      expand: 'Agrandir la photo', previousPhoto: 'Photo précédente', nextPhoto: 'Photo suivante',
+      expand: 'Agrandir le média', previousPhoto: 'Média précédent', nextPhoto: 'Média suivant',
       back: 'Retour à la photo', pause: 'Mettre le diaporama en pause', play: 'Reprendre le diaporama'
     },
     en: {
@@ -61,9 +62,9 @@
       moderation: 'Comments appear after approval.', noComments: 'Be the first to leave a note.',
       sent: 'Thank you! Your comment will appear after review.',
       next: 'Next day', previous: 'Previous day', story: 'The day’s story',
-      chapter: 'chapter', photoCaption: 'Caption', picture: 'Photo', phase: 'Uncategorized',
+      chapter: 'chapter', photoCaption: 'Caption', picture: 'Photo', video: 'Video', phase: 'Uncategorized',
       captionFallback: 'A moment from the construction',
-      expand: 'Enlarge photo', previousPhoto: 'Previous photo', nextPhoto: 'Next photo',
+      expand: 'Enlarge media', previousPhoto: 'Previous media', nextPhoto: 'Next media',
       back: 'Back to the photo', pause: 'Pause slideshow', play: 'Resume slideshow'
     }
   } as const;
@@ -135,13 +136,13 @@
   $effect(() => {
     // Une nouvelle photo ou journée dispose toujours de cinq secondes complètes.
     const photoId = currentPhoto?.id;
-    if (!photoId || !autoplay || !pageVisible || commentsOpen || storyOpen || lightboxOpen || (currentDay?.photos.length ?? 0) < 2) return;
+    if (!photoId || currentPhoto?.kind === 'video' || !autoplay || !pageVisible || commentsOpen || storyOpen || lightboxOpen || (currentDay?.photos.length ?? 0) < 2) return;
     const timer = window.setTimeout(() => switchPhoto(1, true), 5000);
     return () => window.clearTimeout(timer);
   });
   function onWheel(e: WheelEvent) {
     if (commentsOpen || storyOpen || lightboxOpen || !data.days.length) return;
-    const closest = (e.target as HTMLElement).closest('input,textarea,select');
+    const closest = (e.target as HTMLElement).closest('input,textarea,select,video');
     if (closest) return;
     const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
     if (Math.abs(delta) < 2) return;
@@ -154,14 +155,14 @@
   function onKey(e: KeyboardEvent) {
     const target = e.target as HTMLElement | null;
     if (e.key === 'Escape') {commentsOpen = false; storyOpen=false; lightboxOpen=false;return;}
-    if (target?.closest('input,textarea,select,[contenteditable="true"]')) return;
+    if (target?.closest('input,textarea,select,video,[contenteditable="true"]')) return;
     if (commentsOpen || storyOpen) return;
     if (e.key === 'ArrowRight') {e.preventDefault();navigatePhoto(1);}
     if (e.key === 'ArrowLeft') {e.preventDefault();navigatePhoto(-1);}
   }
   function focusDialog(node: HTMLDivElement) {
     const previousFocus = document.activeElement as HTMLElement | null;
-    const focusable = () => Array.from(node.querySelectorAll<HTMLElement>('button:not(:disabled), input:not([tabindex="-1"]), textarea, a[href]'));
+    const focusable = () => Array.from(node.querySelectorAll<HTMLElement>('button:not(:disabled), input:not([tabindex="-1"]), textarea, a[href], video[controls]'));
     (focusable()[0] || node).focus();
     function trapFocus(event: KeyboardEvent) {
       if (event.key !== 'Tab') return;
@@ -284,14 +285,20 @@
           <button type="button" class="comment-trigger" onclick={()=>commentsOpen=true}>{t.comments}{#if currentDay.comments.length} <span>({currentDay.comments.length})</span>{/if} <span aria-hidden="true">↗</span></button>
         </div>
       </section>
-      <section class="photo-gallery" aria-label="Photographies du {prettyDate(currentDay.date)}">
+      <section class="photo-gallery" aria-label="Photos et vidéos du {prettyDate(currentDay.date)}">
         <div class="photo-frame">
           {#if currentPhoto}
             {#key currentPhoto.id}
               <div class="photo-print" in:fade={{duration:400}} out:fade={{duration:190}}>
-                <img class="hero-image" src="/media/{currentPhoto.id}/large" alt={localized(currentPhoto.caption_fr,currentPhoto.caption_en) || t.captionFallback} />
+                {#if currentPhoto.kind === 'video'}
+                  <MediaVideo id={currentPhoto.id} label={localized(currentPhoto.caption_fr,currentPhoto.caption_en) || t.video}
+                    active={pageVisible && !lightboxOpen && !commentsOpen && !storyOpen} onplay={() => autoplay = false} />
+                {:else}
+                  <img class="hero-image" src="/media/{currentPhoto.id}/large" alt={localized(currentPhoto.caption_fr,currentPhoto.caption_en) || t.captionFallback} />
+                {/if}
               </div>
             {/key}
+            {#if currentPhoto.kind !== 'video'}
             {#if currentDay.photos.length>1}
               <button class="photo-hit photo-hit-prev" type="button" onclick={()=>switchPhoto(-1)} aria-label={t.previousPhoto} title={t.previousPhoto}>
                 <span aria-hidden="true"><svg viewBox="0 0 36 24" fill="none"><path d="M31 12.5 5 12M13 4.5 4.5 12l8 7.5" /></svg></span>
@@ -303,6 +310,7 @@
                 <span aria-hidden="true"><svg viewBox="0 0 36 24" fill="none"><path d="m5 12.5 26-.5M23 4.5l8.5 7.5-8 7.5" /></svg></span>
               </button>
             {/if}
+            {/if}
             <button class="expand-photo" type="button" onclick={()=>lightboxOpen=true} aria-label={t.expand}><span aria-hidden="true">⛶</span></button>
           {/if}
         </div>
@@ -313,8 +321,9 @@
             {#if currentDay.photos.length>1}
               <div class="photo-thumbs">
                 {#each currentDay.photos as photo, i (photo.id)}
-                  <button type="button" class:chosen={photoPosition===i} onclick={()=>selectPhoto(i)} aria-label="{t.picture} {i+1}" aria-pressed={photoPosition===i}>
+                  <button type="button" class:chosen={photoPosition===i} onclick={()=>selectPhoto(i)} aria-label="{photo.kind === 'video' ? t.video : t.picture} {i+1}" aria-pressed={photoPosition===i}>
                     <img src="/media/{photo.id}/thumb" alt="" loading="lazy" />
+                    {#if photo.kind === 'video'}<span class="video-mark" aria-hidden="true">▶</span>{/if}
                   </button>
                 {/each}
               </div>
@@ -405,7 +414,13 @@
 {#if lightboxOpen && currentDay && currentPhoto}
   <div class="lightbox" role="dialog" aria-modal="true" aria-label={t.photoCaption} tabindex="-1" use:focusDialog transition:fade={{duration:180}}>
     <div class="lightbox-header"><span>SERETINY · {prettyDate(currentDay.date)}</span><button type="button" onclick={()=>lightboxOpen=false} aria-label={t.close}>×</button></div>
-    <div class="lightbox-content"><button type="button" onclick={()=>switchPhoto(-1)} aria-label={t.previousPhoto} disabled={currentDay.photos.length===1}>←</button><img src="/media/{currentPhoto.id}/large" alt={localized(currentPhoto.caption_fr,currentPhoto.caption_en)||t.captionFallback} /><button type="button" onclick={()=>switchPhoto(1)} aria-label={t.nextPhoto} disabled={currentDay.photos.length===1}>→</button></div>
+    <div class="lightbox-content"><button type="button" onclick={()=>switchPhoto(-1)} aria-label={t.previousPhoto} disabled={currentDay.photos.length===1}>←</button>
+      {#key currentPhoto.id}
+        {#if currentPhoto.kind === 'video'}
+          <div class="lightbox-video"><MediaVideo id={currentPhoto.id} label={localized(currentPhoto.caption_fr,currentPhoto.caption_en)||t.video} active={pageVisible} /></div>
+        {:else}<img src="/media/{currentPhoto.id}/large" alt={localized(currentPhoto.caption_fr,currentPhoto.caption_en)||t.captionFallback} />{/if}
+      {/key}
+      <button type="button" onclick={()=>switchPhoto(1)} aria-label={t.nextPhoto} disabled={currentDay.photos.length===1}>→</button></div>
     <p>{localized(currentPhoto.caption_fr,currentPhoto.caption_en)||t.captionFallback} <span>{photoPosition+1} / {currentDay.photos.length}</span></p>
     <button class="lightbox-backdrop" type="button" onclick={()=>lightboxOpen=false} aria-label={t.close}></button>
   </div>
@@ -472,6 +487,9 @@
 .photo-frame::before { left: 11%; transform: rotate(-8deg); }
 .photo-frame::after { right: 9%; transform: rotate(6deg); }
 .photo-print { position: absolute; inset: clamp(2px, .5vw, 8px); display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.photo-thumbs button { position:relative; }
+.video-mark { position:absolute; inset:0; display:grid; place-items:center; color:white; text-shadow:0 1px 4px #000; pointer-events:none; }
+.lightbox-video { width:calc(100% - 90px); height:100%; min-height:0; pointer-events:auto; }
 .hero-image {
   display: block;
   width: auto;

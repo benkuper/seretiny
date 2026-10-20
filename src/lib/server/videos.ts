@@ -41,7 +41,8 @@ function captureTime(probe: Probe) {
 
 export async function processMedia(file: File, {requireCaptureDate = false} = {}) {
   const header = Buffer.from(await file.slice(0, 16).arrayBuffer());
-  const mp4 = header.toString('ascii', 4, 8) === 'ftyp';
+  const imageBrand = ['avif', 'avis', 'heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'].includes(header.toString('ascii', 8, 12));
+  const mp4 = header.toString('ascii', 4, 8) === 'ftyp' && !imageBrand;
   const webm = header.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
   if (!mp4 && !webm) {
     if (file.type.startsWith('video/') || /\.(mp4|m4v|mov|webm)$/i.test(file.name)) throw new Error('Fichier vidéo invalide.');

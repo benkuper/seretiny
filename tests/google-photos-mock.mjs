@@ -1,6 +1,6 @@
 // Loaded only by the integration test's isolated server process.
 import assert from 'node:assert/strict';
-import { photo } from './fixtures.mjs';
+import { photo, video } from './fixtures.mjs';
 
 const originalFetch = globalThis.fetch;
 const sessions = new Map();
@@ -80,6 +80,13 @@ globalThis.fetch = async (input, init = {}) => {
     }
     if (url.pathname === '/v1/mediaItems') {
       assert.equal(url.searchParams.get('pageSize'), '100');
+      if (scenario === 'videos') {
+        const clip = (id, status) => ({id, type: 'VIDEO', createTime: '2023-07-01T23:30:00Z', mediaFile: {
+          filename: `${id}.mp4`, mimeType: 'video/mp4', baseUrl: `https://lh3.googleusercontent.com/${id}`,
+          mediaFileMetadata: {videoMetadata: {processingStatus: status}}
+        }});
+        return asJson({mediaItems: [clip('google-video', 'READY'), clip('google-processing', 'PROCESSING')]});
+      }
       if (scenario === 'chronological') return asJson({mediaItems: [
         item('google-late', '2022-12-02T23:30:00Z'),
         item('google-early', '2022-12-02T23:10:00Z')
@@ -117,10 +124,16 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.hostname === 'lh3.googleusercontent.com') {
     assert.match(init.headers.Authorization, /^Bearer test-access-token:/);
     assert.equal(init.redirect, 'error');
-    assert.ok(url.pathname.endsWith('=d'));
+    const isVideo = url.pathname.endsWith('=dv');
+    assert.ok(url.pathname.endsWith('=d') || isVideo);
     if (init.headers.Authorization.endsWith(':repeat')) return new Response('Duplicate should not be downloaded', {status: 500});
     if (init.headers.Authorization.endsWith(':large-selection')) await new Promise(resolve => setTimeout(resolve, 8));
-    const path = url.pathname.slice(1, -2);
+    const path = url.pathname.slice(1, isVideo ? -3 : -2);
+    if (isVideo) {
+      assert.equal(path, 'google-video');
+      const fixture = await video('google-video.mp4', {date: null});
+      return new Response(fixture.buffer, {headers: {'Content-Type': fixture.type}});
+    }
     const attempts = (mediaAttempts.get(path) || 0) + 1;
     mediaAttempts.set(path, attempts);
     if (path === 'stream-timeout' || path === 'stream-permanent' || path === 'connection-timeout') {

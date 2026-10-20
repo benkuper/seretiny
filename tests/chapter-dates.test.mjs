@@ -129,7 +129,7 @@ test('start day belongs to the new chapter and the last chapter remains open', a
 
 test('imports and public rendering follow dates even when a manual chapter is submitted', async () => {
   const image = await photo('chapter.jpg', '2024:07:01 10:00:00');
-  assert.equal((await post('/admin?/importPhotos', {chapter: 1}, [image])).status, 303);
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture', chapter: 1}, [image])).status, 303);
   await expectChapter('2024-07-01', 'Construction');
   assert.equal((await post('/admin?/saveDay', {id: dayId('2024-07-01'), date: '2024-07-01',
     title_fr: 'Le chantier', published: 'on', chapter: 1})).status, 303);

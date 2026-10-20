@@ -2,7 +2,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { Cookies } from '@sveltejs/kit';
 import { GOOGLE_PHOTOS_CLIENT_ID, GOOGLE_PHOTOS_CLIENT_SECRET, GOOGLE_PHOTOS_REDIRECT_URI } from '$app/env/private';
 import { adminSessionKey, isAdmin } from './auth.js';
-import { dateValid } from './db.js';
 import { MAX_FILE } from './images.js';
 import { MAX_VIDEO_FILE } from './videos.js';
 import { localTakenAt } from './media-dates.js';

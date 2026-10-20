@@ -8,7 +8,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { unflatten } from 'devalue';
-import { photo } from './fixtures.mjs';
+import { photo, video } from './fixtures.mjs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 // Exercise real form actions and generated media against an isolated database.
 let directory, server, database, origin, cookie;
@@ -93,7 +95,7 @@ function photoCount(dayId) {
 }
 
 test('automatic import requires authentication', async () => {
-  const response = await post('/admin?/importPhotos', {}, [await photo('private.jpg', '2024:05:10 12:00:00')], false);
+  const response = await post('/admin?/importPhotos', {destination: 'capture'}, [await photo('private.jpg', '2024:05:10 12:00:00')], false);
   assert.equal(response.status, 303);
   assert.equal(response.headers.get('location'), '/admin/login');
   assert.equal(day('2024-05-10'), undefined);
@@ -101,7 +103,7 @@ test('automatic import requires authentication', async () => {
 
 test('additive migration indexes existing originals and preserves their captions', async () => {
   assert.ok(database.prepare("SELECT name FROM schema_migrations WHERE name='001-photo-sources'").get());
-  const response = await post('/admin?/importPhotos', {}, [await photo('legacy.jpg', '2020:01:02 10:00:00')]);
+  const response = await post('/admin?/importPhotos', {destination: 'capture'}, [await photo('legacy.jpg', '2020:01:02 10:00:00')]);
   assert.equal(response.status, 303);
   assert.match(new URL(response.headers.get('location'), origin).searchParams.get('notice'), /1 doublon/);
   assert.equal(database.prepare("SELECT caption_fr FROM photos WHERE id='legacy-photo'").get().caption_fr, 'Légende existante');
@@ -125,13 +127,13 @@ test('taken-date migration recovers existing originals before displaying them', 
 });
 
 test('groups capture dates into visible days, preserving the camera day near midnight', async () => {
-  const response = await post('/admin?/importPhotos', {chapter: 1}, [
+  const response = await post('/admin?/importPhotos', {destination: 'capture', chapter: 1}, [
     await photo('morning.jpg', '2024:06:01 08:10:00'),
     await photo('midnight.jpg', '2024:06:02 00:15:00', {OffsetTimeOriginal: '+12:00'}),
     await photo('evening.webp', '2024:06:01 23:50:00', {OffsetTimeOriginal: '-11:00'}, 'webp')
   ]);
   assert.equal(response.status, 303, (await response.text()).slice(0,300));
-  assert.match(new URL(response.headers.get('location'), origin).searchParams.get('notice'), /3 photo.*2 journée.*2 nouvelle/);
+  assert.match(new URL(response.headers.get('location'), origin).searchParams.get('notice'), /3 média.*2 journée.*2 nouvelle/);
   assert.equal(photoCount(day('2024-06-01').id), 2);
   assert.equal(photoCount(day('2024-06-02').id), 1);
   assert.equal(day('2024-06-01').published, 1);
@@ -146,7 +148,7 @@ test('reuses existing days and appends photos without overwriting editorial chan
   const existing = day('2024-06-01');
   database.prepare("UPDATE days SET title_fr='Le plancher', body_fr='Notre récit', published=1 WHERE id=?").run(existing.id);
   database.prepare('UPDATE photos SET sort_order=12 WHERE day_id=?').run(existing.id);
-  const response = await post('/admin?/importPhotos', {chapter: 2}, [await photo('extra.jpg', '2024:06:01 14:00:00')]);
+  const response = await post('/admin?/importPhotos', {destination: 'capture', chapter: 2}, [await photo('extra.jpg', '2024:06:01 14:00:00')]);
   assert.equal(response.status, 303);
   assert.deepEqual(day('2024-06-01'), {...existing, title_fr: 'Le plancher', body_fr: 'Notre récit', published: 1});
   const added = database.prepare('SELECT * FROM photos WHERE original_name=?').get('extra.jpg');
@@ -156,21 +158,21 @@ test('reuses existing days and appends photos without overwriting editorial chan
 
 test('skips undated photos, continues the batch and reports only unsuccessful files', async () => {
   const countBefore = (await readdir(join(directory, 'originals'))).length;
-  const response = await post('/admin?/importPhotos', {}, [
+  const response = await post('/admin?/importPhotos', {destination: 'capture'}, [
     await photo('no-date.png', null, {}, 'png'),
     await photo('dated.jpg', '2024:06:03 09:00:00'),
     {name: 'broken.jpg', buffer: Buffer.from('not an image'), type: 'image/jpeg'}
   ]);
   assert.equal(response.status, 303);
   const params = new URL(response.headers.get('location'), origin).searchParams;
-  assert.match(params.get('notice'), /1 photo/);
-  assert.match(params.get('warning'), /2 photo.*no-date.png.*broken.jpg/);
+  assert.match(params.get('notice'), /1 média/);
+  assert.match(params.get('warning'), /2 média.*no-date.png.*broken.jpg/);
   assert.equal(photoCount(day('2024-06-03').id), 1);
   assert.equal((await readdir(join(directory, 'originals'))).length, countBefore + 1);
 });
 
 test('fallback applies only to photos without a usable capture date', async () => {
-  const response = await post('/admin?/importPhotos', {fallback_date: '2024-07-01'}, [
+  const response = await post('/admin?/importPhotos', {destination: 'capture', fallback_date: '2024-07-01'}, [
     await photo('fallback.jpg', null),
     await photo('bad-exif.jpg', 'invalid'),
     await photo('keep-date.jpg', '2024:07:02 12:00:00')
@@ -178,11 +180,11 @@ test('fallback applies only to photos without a usable capture date', async () =
   assert.equal(response.status, 303);
   assert.equal(photoCount(day('2024-07-01').id), 2);
   assert.equal(photoCount(day('2024-07-02').id), 1);
-  assert.match(new URL(response.headers.get('location'), origin).searchParams.get('notice'), /remplacement utilisée pour 2 photo/);
+  assert.match(new URL(response.headers.get('location'), origin).searchParams.get('notice'), /remplacement utilisée pour 2 média/);
 });
 
 test('digitized EXIF date is used when original date is absent', async () => {
-  const response = await post('/admin?/importPhotos', {}, [await photo('digitized.jpg', null, {DateTimeDigitized: '2024:08:01 10:00:00'})]);
+  const response = await post('/admin?/importPhotos', {destination: 'capture'}, [await photo('digitized.jpg', null, {DateTimeDigitized: '2024:08:01 10:00:00'})]);
   assert.equal(response.status, 303);
   assert.equal(photoCount(day('2024-08-01').id), 1);
 });
@@ -195,7 +197,7 @@ test('validates the fallback date and batch size before writing', async () => {
     [{}, []],
     [{}, Array(9).fill(image)]
   ]) {
-    assert.equal((await post('/admin?/importPhotos', fields, images)).status, 400);
+    assert.equal((await post('/admin?/importPhotos', {destination: 'capture', ...fields}, images)).status, 400);
   }
   assert.equal(database.prepare('SELECT COUNT(*) AS n FROM photos').get().n, countBefore);
 });
@@ -203,9 +205,60 @@ test('validates the fallback date and batch size before writing', async () => {
 test('an entirely undated batch writes no empty days or orphan files', async () => {
   const daysBefore = database.prepare('SELECT COUNT(*) AS n FROM days').get().n;
   const filesBefore = await readdir(join(directory, 'originals'));
-  const response = await post('/admin?/importPhotos', {}, [await photo('undated.jpg', null)]);
+  const response = await post('/admin?/importPhotos', {destination: 'capture'}, [await photo('undated.jpg', null)]);
   assert.equal(response.status, 400);
-  assert.match(await response.text(), /Aucune photo importée/);
+  assert.match(await response.text(), /Aucun média importé/);
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM days').get().n, daysBefore);
+  assert.deepEqual(await readdir(join(directory, 'originals')), filesBefore);
+});
+
+test('file import defaults to today in the journal time zone and reuses that day', async () => {
+  const parts = new Intl.DateTimeFormat('en', {timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit'}).formatToParts(new Date());
+  const part = name => parts.find(item => item.type === name).value;
+  const today = `${part('year')}-${part('month')}-${part('day')}`;
+  assert.equal(day(today), undefined);
+  const response = await post('/admin?/importPhotos', {}, [
+    await photo('today-undated.jpg', null),
+    await photo('today-with-exif.jpg', '2019:03:02 10:00:00')
+  ]);
+  assert.equal(response.status, 303);
+  assert.equal(photoCount(day(today).id), 2);
+  assert.equal(day(today).published, 1);
+  assert.equal(day('2019-03-02'), undefined);
+  database.prepare("UPDATE days SET title_fr='Aujourd’hui au chantier', body_fr='Récit du jour', published=0 WHERE id=?").run(day(today).id);
+  const existing = day(today);
+  assert.equal((await post('/admin?/importPhotos', {date: ''}, [await photo('today-again.jpg', null)])).status, 303);
+  assert.deepEqual(day(today), existing);
+  assert.equal(photoCount(existing.id), 3);
+});
+
+test('file import accepts a free date and an existing day, overriding capture dates', async () => {
+  const response = await post('/admin?/importPhotos', {date: '2024-07-15'}, [await photo('free-date.jpg', '2019:04:03 09:00:00')]);
+  assert.equal(response.status, 303);
+  const existing = day('2024-07-15');
+  assert.equal(photoCount(existing.id), 1);
+  assert.equal(day('2019-04-03'), undefined);
+  const imported = database.prepare("SELECT taken_at FROM photos WHERE original_name='free-date.jpg'").get();
+  assert.equal(imported.taken_at, '2019-04-03T09:00:00.000');
+  database.prepare("UPDATE days SET title_fr='Journée choisie', body_fr='Récit conservé', published=0 WHERE id=?").run(existing.id);
+  const edited = day(existing.date);
+  const selected = await post('/admin?/importPhotos', {destination: existing.date, date: '2024-07-16'}, [await photo('chosen-day.jpg', null)]);
+  assert.equal(selected.status, 303);
+  assert.deepEqual(day(existing.date), edited);
+  assert.equal(photoCount(existing.id), 2);
+  assert.equal(day('2024-07-16'), undefined);
+  const html = await (await fetch(`${origin}/admin?view=imports`, {headers: {cookie}})).text();
+  assert.match(html, /name="destination"/);
+  assert.match(html, /value="2024-07-15"[^>]*>[^<]*Journée choisie/);
+});
+
+test('file import validates custom dates and destinations before storing files', async () => {
+  const daysBefore = database.prepare('SELECT COUNT(*) AS n FROM days').get().n;
+  const filesBefore = await readdir(join(directory, 'originals'));
+  const image = await photo('invalid-destination.jpg', null);
+  for (const fields of [{date: '2024-02-30'}, {date: '2024-07-15extra'}, {destination: 'invalid'}, {destination: '2024-02-30'}]) {
+    assert.equal((await post('/admin?/importPhotos', fields, [image])).status, 400);
+  }
   assert.equal(database.prepare('SELECT COUNT(*) AS n FROM days').get().n, daysBefore);
   assert.deepEqual(await readdir(join(directory, 'originals')), filesBefore);
 });
@@ -230,7 +283,7 @@ test('identical files are skipped despite renaming or changing the requested day
   image.name = 'renamed.jpg';
   const before = database.prepare('SELECT COUNT(*) AS n FROM photos').get().n;
   for (const [path, fields] of [
-    ['/admin?/importPhotos', {fallback_date: '2024-12-01'}],
+    ['/admin?/importPhotos', {destination: 'capture', fallback_date: '2024-12-01'}],
     ['/admin?/upload', {day_id: day('2024-06-03').id}]
   ]) {
     const response = await post(path, fields, [image]);
@@ -328,7 +381,7 @@ test('Google persistent IDs prevent repeat downloads even after editing captions
 
 test('Google import recognizes a photo already imported from disk and records its Google ID', async () => {
   const image = await photo('from-local.jpg', '2024:12:01 10:00:00');
-  assert.equal((await post('/admin?/importPhotos', {}, [image])).status, 303);
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture'}, [image])).status, 303);
   await connectGoogle('local-duplicate');
   const progress = await importGoogle();
   assert.equal(progress.imported, 0);
@@ -558,11 +611,11 @@ async function loadedDays(path = '') {
 }
 
 test('public and admin photos follow camera time across batches, ignoring manual and import order', async () => {
-  assert.equal((await post('/admin?/importPhotos', {}, [
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture'}, [
     await photo('order-late.jpg', '2022:06:01 23:50:00'),
     await photo('order-early.jpg', '2022:06:01 00:10:00')
   ])).status, 303);
-  assert.equal((await post('/admin?/importPhotos', {}, [await photo('order-middle.jpg', '2022:06:01 12:00:00')])).status, 303);
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture'}, [await photo('order-middle.jpg', '2022:06:01 12:00:00')])).status, 303);
   const target = day('2022-06-01');
   database.prepare("UPDATE photos SET sort_order=CASE original_name WHEN 'order-late.jpg' THEN 0 ELSE 999 END WHERE day_id=?").run(target.id);
   const expected = ['order-early.jpg', 'order-middle.jpg', 'order-late.jpg'];
@@ -604,4 +657,122 @@ test('Google photos without EXIF are ordered by Google capture time in the confi
   const loaded = (await loadedDays()).find(item => item.date === '2022-12-03');
   assert.deepEqual(loaded.photos.map(item => item.original_name), ['google-early.jpg', 'google-late.jpg']);
   assert.deepEqual(loaded.photos.map(item => item.taken_at), ['2022-12-03T00:10:00.000', '2022-12-03T00:30:00.000']);
+});
+
+test('video migration keeps old photos and mixed imports ordered by capture time', async () => {
+  assert.ok(database.prepare("SELECT name FROM schema_migrations WHERE name='004-video-media'").get());
+  assert.equal(database.prepare("SELECT kind FROM photos WHERE id='legacy-photo'").get().kind, 'photo');
+  const clip = await video('construction.mp4');
+  const response = await post('/admin?/importPhotos', {destination: 'capture'}, [clip, await photo('before-video.jpg', '2023:05:01 09:00:00')]);
+  assert.equal(response.status, 303, await response.text());
+  const loaded = (await loadedDays()).find(item => item.date === '2023-05-01');
+  assert.deepEqual(loaded.photos.map(item => item.kind), ['photo', 'video']);
+  const item = loaded.photos[1];
+  assert.equal(item.taken_at, '2023-05-01T10:00:00.000');
+  assert.equal((await fetch(`${origin}/media/${item.id}/thumb`)).headers.get('content-type'), 'image/webp');
+  assert.equal((await fetch(`${origin}/media/${item.id}/large`)).status, 200);
+  // Compare compressed video packet data: native H.264 MP4 must not be re-encoded.
+  const hash = async path => (await promisify(execFile)(process.env.FFMPEG_PATH || 'ffmpeg',
+    ['-v', 'error', '-i', path, '-map', '0:v:0', '-c', 'copy', '-f', 'hash', '-hash', 'sha256', 'pipe:1'], {windowsHide: true})).stdout;
+  assert.equal(await hash(join(directory, 'originals', `${item.id}.mp4`)), await hash(join(directory, 'media', `${item.id}.mp4`)));
+});
+
+test('videos stream full files and byte ranges, with the same publication protection as photos', async () => {
+  const item = database.prepare("SELECT * FROM photos WHERE original_name='construction.mp4'").get();
+  const url = `${origin}/media/${item.id}/video`;
+  const full = await fetch(url);
+  assert.equal(full.status, 200);
+  assert.equal(full.headers.get('content-type'), 'video/mp4');
+  assert.equal(full.headers.get('accept-ranges'), 'bytes');
+  const bytes = Buffer.from(await full.arrayBuffer());
+  assert.equal(Number(full.headers.get('content-length')), bytes.length);
+  for (const [range, start, end] of [['bytes=0-31', 0, 31], ['bytes=32-', 32, bytes.length-1], ['bytes=-16', bytes.length-16, bytes.length-1]]) {
+    const part = await fetch(url, {headers: {range}});
+    assert.equal(part.status, 206);
+    assert.equal(part.headers.get('content-range'), `bytes ${start}-${end}/${bytes.length}`);
+    assert.deepEqual(Buffer.from(await part.arrayBuffer()), bytes.subarray(start, end+1));
+  }
+  for (const range of ['bytes=999999999-', 'bytes=32-1', 'bytes=-0', 'bytes=0-1,3-4', 'bytes=bad']) {
+    const part = await fetch(url, {headers: {range}});
+    assert.equal(part.status, 416);
+    assert.equal(part.headers.get('content-range'), `bytes */${bytes.length}`);
+  }
+  const head = await fetch(url, {method: 'HEAD'});
+  assert.equal(head.status, 200);
+  assert.equal(Number(head.headers.get('content-length')), bytes.length);
+  assert.equal((await head.arrayBuffer()).byteLength, 0);
+  database.prepare('UPDATE days SET published=0 WHERE id=?').run(item.day_id);
+  for (const variant of ['video', 'thumb', 'large']) {
+    assert.equal((await fetch(`${origin}/media/${item.id}/${variant}`, {headers: {range: 'bytes=0-15'}})).status, 404);
+  }
+  const privateVideo = await fetch(url, {headers: {cookie, range: 'bytes=0-15'}});
+  assert.equal(privateVideo.status, 206);
+  assert.equal(privateVideo.headers.get('cache-control'), 'private, no-store');
+  database.prepare('UPDATE days SET published=1 WHERE id=?').run(item.day_id);
+});
+
+test('undated WebM and MOV imports use fallback dates, convert for native playback and preserve captions on duplicate import', async () => {
+  const webm = await video('clip.webm', {format: 'webm', date: null});
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture'}, [webm])).status, 400);
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture', fallback_date: '2023-06-01'}, [webm])).status, 303);
+  const mov = await video('clip.mov', {format: 'mov', cameraDate: '2023-06-02T00:15:00+12:00'});
+  assert.equal((await post('/admin?/importPhotos', {destination: 'capture'}, [mov])).status, 303);
+  const item = database.prepare("SELECT * FROM photos WHERE original_name='clip.webm'").get();
+  assert.equal((await fetch(`${origin}/media/${item.id}/video`)).status, 200);
+  await post('/admin?/savePhoto', {id: item.id, date: '2023-06-04', caption_fr: 'La pose des murs'});
+  const duplicate = await post('/admin?/importPhotos', {destination: 'capture', fallback_date: '2023-06-01'}, [webm]);
+  assert.match(new URL(duplicate.headers.get('location'), origin).searchParams.get('notice'), /1 doublon/);
+  assert.equal(database.prepare('SELECT caption_fr FROM photos WHERE id=?').get(item.id).caption_fr, 'La pose des murs');
+  assert.equal(database.prepare("SELECT taken_at FROM photos WHERE original_name='clip.mov'").get().taken_at, '2023-06-02T00:15:00.000');
+});
+
+test('manual video uploads, public native player and library badges work; deletion clears all derivatives', async () => {
+  const target = day('2020-01-02');
+  assert.equal((await post('/admin?/upload', {day_id: target.id}, [await video('manual-video.mp4')])).status, 303);
+  const item = database.prepare("SELECT * FROM photos WHERE original_name='manual-video.mp4'").get();
+  assert.equal(item.kind, 'video');
+  assert.equal(item.day_id, target.id);
+  const editor = await (await fetch(`${origin}/admin?day=${target.id}`, {headers: {cookie}})).text();
+  assert.match(editor, /VIDÉO/);
+  const library = await (await fetch(`${origin}/admin?view=photos`, {headers: {cookie}})).text();
+  assert.match(library, /▶ Vidéo/);
+  // Make a video the first public item to exercise SSR's actual native player.
+  database.prepare('UPDATE days SET published=1 WHERE id=?').run(target.id);
+  database.prepare("UPDATE photos SET taken_at='2019-01-01T00:00:00.000' WHERE id=?").run(item.id);
+  const html = await (await fetch(origin)).text();
+  assert.match(html, new RegExp(`<video[^>]+src="/media/${item.id}/video"[^>]+controls`));
+  const deleted = await post('/admin?/deletePhoto', {id: item.id, day_id: target.id});
+  assert.equal(deleted.status, 303);
+  assert.equal(database.prepare('SELECT id FROM photos WHERE id=?').get(item.id), undefined);
+  for (const folder of ['originals', 'media']) assert.ok(!(await readdir(join(directory, folder))).some(file => file.startsWith(item.id)));
+});
+
+test('invalid video and audio-only MP4 leave no originals, derivatives or empty days', async () => {
+  const before = await readdir(join(directory, 'originals'));
+  const fake = {name: 'fake.mp4', type: 'video/mp4', buffer: Buffer.from('not a video')};
+  const audio = await video('audio.mp4', {audioOnly: true});
+  for (const file of [fake, audio]) {
+    assert.equal((await post('/admin?/importPhotos', {destination: 'capture', fallback_date: '2023-08-01'}, [file])).status, 400);
+  }
+  assert.deepEqual(await readdir(join(directory, 'originals')), before);
+  assert.equal(day('2023-08-01'), undefined);
+  const photoId = database.prepare("SELECT id FROM photos WHERE original_name='before-video.jpg'").get().id;
+  assert.equal((await fetch(`${origin}/media/${photoId}/video`)).status, 404);
+});
+
+test('AVIF images sharing the MP4 file signature still import as photos', async () => {
+  const response = await post('/admin?/importPhotos', {destination: 'capture', fallback_date: '2023-08-02'}, [await photo('still-photo.avif', null, {}, 'avif')]);
+  assert.equal(response.status, 303, await response.text());
+  assert.equal(database.prepare("SELECT kind FROM photos WHERE original_name='still-photo.avif'").get().kind, 'photo');
+});
+
+test('Google video downloads use dv, import ready clips and report videos still being processed', async () => {
+  await connectGoogle('videos');
+  const progress = await importGoogle();
+  assert.equal(progress.imported, 1);
+  assert.equal(progress.failed, 1);
+  assert.match(progress.errors[0], /pas encore prête/);
+  const loaded = (await loadedDays()).find(item => item.date === '2023-07-02');
+  assert.equal(loaded.photos[0].kind, 'video');
+  assert.equal(loaded.photos[0].taken_at, '2023-07-02T01:30:00.000');
 });

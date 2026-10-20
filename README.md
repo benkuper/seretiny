@@ -6,7 +6,7 @@ Projet personnel autonome, en français (anglais en option), conçu pour un VPS 
 
 ## Démarrage en local
 
-**Prérequis :** Node.js **22.17 ou plus récent**, npm. Les dépendances natives (`better-sqlite3` et `sharp`) peuvent nécessiter des outils de compilation sur certaines machines.
+**Prérequis :** Node.js **22.17 ou plus récent**, npm, et **FFmpeg avec ffprobe** pour importer des vidéos et exécuter les tests vidéo. Les dépendances natives (`better-sqlite3` et `sharp`) peuvent nécessiter des outils de compilation sur certaines machines. Docker est facultatif.
 
 ```bash
 # Après avoir décompressé l'archive :
@@ -58,6 +58,18 @@ Déplacer des photos vers une nouvelle date crée une journée avec affichage ac
 
 Les photos originales restent privées dans `data/originals/`. Le site public sert des versions WebP, recadrées pour les miniatures et redimensionnées pour les grandes images. Les photos des journées masquées ne sont pas accessibles sans authentification.
 
+## Photos et vidéos
+
+Les mêmes formulaires acceptent aussi les **MP4, MOV et WebM**, jusqu’à **100 Mo et 10 minutes par vidéo**, avec 1 à 8 fichiers et **120 Mo au total par envoi**. Chaque vidéo possède sa légende, sa date d’affichage éditable et sa miniature. Photos et vidéos sont classées ensemble par date et heure de prise de vue ; la date d’affichage sert de repli si cette information manque.
+
+La lecture utilise le lecteur **`<video>` natif du navigateur**, avec son, commandes, lecture intégrée et plein écran. Elle démarre uniquement à la demande et le diaporama ne passe pas automatiquement au média suivant pendant une vidéo. Ouvrir une fenêtre du journal ou changer de média arrête la lecture en cours.
+
+**Docker n’est pas nécessaire à la lecture ni à l’installation.** [FFmpeg](https://ffmpeg.org/download.html) et ffprobe servent côté serveur à vérifier les vidéos, lire leurs métadonnées et créer les miniatures. Les MP4 H.264 avec audio AAC/MP3 sont préparés pour une lecture progressive **sans réencodage** ; les autres codecs sont convertis en MP4 H.264/AAC. Les originaux sont conservés dans `data/originals/`, et les versions de lecture dans `data/media/`. La route vidéo gère les requêtes HTTP Range pour avancer dans le film, avec les mêmes contrôles d’accès que les photos.
+
+Sur Debian/Ubuntu sans Docker : `sudo apt-get install ffmpeg`. Sous Windows : `winget install --id Gyan.FFmpeg.Essentials --exact`, puis rouvrir le terminal et redémarrer le serveur de développement. Si nécessaire, définir `FFMPEG_PATH` et `FFPROBE_PATH` dans `.env` avec les chemins absolus des exécutables. Le conteneur existant inclut ces outils.
+
+Les dates QuickTime locales sont conservées ; les dates vidéo UTC sont converties dans `GOOGLE_PHOTOS_TIME_ZONE`. Les vidéos sans date nécessitent la date de remplacement pour le regroupement automatique, ou peuvent être importées directement dans une journée. La migration additive `004-video-media` attribue le type photo aux contenus existants, sans modifier les dates, récits et légendes.
+
 Dans **Les chapitres**, définir une **date de début** unique pour chaque chapitre. Ils sont classés chronologiquement : un chapitre couvre sa date de début incluse jusqu'au début du suivant exclu. Le dernier reste ouvert ; les journées antérieures au premier restent sans chapitre. Modifier une date de chapitre, de journée ou de photo actualise automatiquement ce rattachement.
 
 La migration SQLite vers `user_version = 2` reprend la première journée associée à chaque chapitre comme date de début, en préservant les contenus existants. Les chapitres sans journée restent à dater dans l'atelier.
@@ -79,7 +91,7 @@ GOOGLE_PHOTOS_REDIRECT_URI=http://localhost:5173/admin/google-photos/callback
 GOOGLE_PHOTOS_TIME_ZONE=Europe/Paris
 ```
 
-4. Dans l'atelier, cliquer **Choisir dans Google Photos**, autoriser l'accès demandé, ouvrir la sélection Google et choisir les photos souhaitées : SereTiny n'ajoute aucune limite au sélecteur (Google autorise jusqu'à **2 000 éléments** par sélection). Valider dans Google, revenir à SereTiny puis cliquer **Importer la sélection**. L'import se poursuit en arrière-plan, une image à la fois, avec une progression et un bilan dans l'atelier. Tu peux recharger la page pendant le traitement. Les vidéos et les images hors des formats ou limites acceptés sont signalées.
+4. Dans l'atelier, cliquer **Choisir dans Google Photos**, autoriser l'accès demandé, ouvrir la sélection Google et choisir les photos et vidéos souhaitées : SereTiny n'ajoute aucune limite au sélecteur (Google autorise jusqu'à **2 000 éléments** par sélection). Valider dans Google, revenir à SereTiny puis cliquer **Importer la sélection**. L'import se poursuit en arrière-plan, un fichier à la fois, avec une progression et un bilan dans l'atelier. Tu peux recharger la page pendant le traitement. Les fichiers hors des formats ou limites acceptés sont signalés. Les vidéos doivent avoir terminé leur traitement chez Google ; elles sont téléchargées via le paramètre `dv` documenté dans [Google Photos Picker](https://developers.google.com/photos/picker/guides/media-items).
 
 Les journées utilisent la date EXIF locale ; à défaut, la date de création fournie par Google est convertie dans `GOOGLE_PHOTOS_TIME_ZONE` (Europe/Paris par défaut). Une date de remplacement facultative couvre les images sans date exploitable. Les journées nouvelles sont visibles dès l’import ; les journées existantes conservent leurs textes et leur statut.
 
