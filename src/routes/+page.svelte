@@ -157,23 +157,22 @@
     const dayId = currentDay?.id;
     if (!strip || !dayId || !compactGallery) return;
     let frame = 0;
-    function keepThumbnailVisible() {
+    function centerThumbnail() {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const thumbnail = strip!.children[selectedIndex] as HTMLElement | undefined;
         if (!thumbnail) return;
-        const item = thumbnail.getBoundingClientRect();
-        const viewport = strip!.getBoundingClientRect();
-        if (item.left >= viewport.left + 3 && item.right <= viewport.right - 3) return;
-        strip!.scrollBy({
-          left: item.left - viewport.left - (strip!.clientWidth - thumbnail.offsetWidth) / 2,
+        const left = thumbnail.offsetLeft - (strip!.clientWidth - thumbnail.offsetWidth) / 2;
+        if (Math.abs(strip!.scrollLeft - left) < 1) return;
+        strip!.scrollTo({
+          left,
           behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
         });
       });
     }
-    const observer = new ResizeObserver(keepThumbnailVisible);
+    const observer = new ResizeObserver(centerThumbnail);
     observer.observe(strip);
-    keepThumbnailVisible();
+    centerThumbnail();
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   });
   function switchPhoto(shift: number, automatic = false) {
@@ -379,7 +378,6 @@
               </button>
             {/if}
             {/if}
-            <button class="expand-photo" type="button" onclick={()=>lightboxOpen=true} aria-label={t.expand}><span aria-hidden="true">⛶</span></button>
           {/if}
         </div>
         <div class="photo-controls">
@@ -580,8 +578,6 @@
 .photo-hit:hover span, .photo-hit:focus-visible span { opacity: 1; transform: translateX(0) rotate(-3deg); }
 .photo-hit-next:hover span, .photo-hit-next:focus-visible span { transform: translateX(0) rotate(3deg); }
 .photo-hit:hover span { color: var(--ink); box-shadow: 0 1px 0 #fffdf5b3 inset, 1px 4px 10px #493a2438; }
-.expand-photo { position: absolute; z-index: 3; right: 10px; top: 12px; width: 40px; height: 40px; border: 1px solid #f5f0dfb0; border-radius: 44% 51% 46% 50%; background: #263a4388; color: #fffdf0; font-size: 23px; }
-.expand-photo:hover { background: #263a43dd; }
 .photo-controls { display: grid; flex-shrink: 0; gap: 8px; padding: 12px 5px 0; }
 .photo-caption { margin: 0; min-width: 0; font: 23px/1.2 'Caveat', cursive; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .photo-caption:empty { display: none; }
@@ -758,12 +754,16 @@
   .story-topline { display: none; }
   .story-main { margin-top: 0; }
   .gallery-nav { grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
-  .photo-thumbs { grid-column: 2; grid-row: 1; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; height: 64px; padding: 5px 3px 7px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x; scroll-snap-type: x proximity; scrollbar-width: none; }
+  .photo-thumbs { position: relative; grid-column: 2; grid-row: 1; flex-wrap: nowrap; justify-content: flex-start; gap: 8px; height: 64px; padding: 5px 3px 7px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; touch-action: pan-x; scroll-snap-type: x proximity; scrollbar-width: none; }
+  /* Leave enough room to center the first and last thumbnails, including the 8px gap. */
+  .photo-thumbs::before, .photo-thumbs::after { content: ''; flex: 0 0 max(0px, calc(50% - 34px)); }
   .photo-thumbs::-webkit-scrollbar { display: none; }
   .photo-thumbs button, .photo-thumbs button:nth-child(even) { flex-basis: 52px; height: 52px; transform: none; scroll-snap-align: center; }
   .photo-thumbs button:focus-visible { outline: 1px solid var(--ink); outline-offset: 1px; }
   .photo-thumbs img { object-fit: cover; }
-  .photo-hit-prev span, .photo-hit-next span, .arrows, .day-navigation { display: none; }
+  .photo-hit span { opacity: .9; transform: rotate(-3deg); }
+  .photo-hit-next span { transform: rotate(3deg); }
+  .arrows, .day-navigation { display: none; }
   .timeline-shell { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {

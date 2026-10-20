@@ -156,7 +156,8 @@ Si l’atelier signale une impossibilité de joindre Google, vérifier la connex
 - **Frise en bas** : faire glisser horizontalement à la souris, ou cliquer sur une date.
 - **Flèches gauche / droite** : navigation clavier entre les journées.
 - **Miniatures et flèches autour de l'image** : photos de la même journée.
-- **Téléphone / écran tactile** : miniatures sur une seule rangée horizontale avec la photo sélectionnée gardée en vue ; compteur intégré et espace libéré pour l’image principale. Pas de diaporama automatique ni de barre lecture/précédent/suivant. La date au-dessus du titre et les commandes précédent/suivant des journées sont masquées ; la frise tactile sert à choisir une journée. L’affichage sur ordinateur conserve ses commandes.
+- **Téléphone / écran tactile** : miniatures sur une seule rangée horizontale avec la photo sélectionnée centrée, y compris en début et en fin de liste ; compteur intégré et espace libéré pour l’image principale. Les flèches sur l’aperçu restent visibles sans survol. Pas de diaporama automatique ni de barre de commandes sous la photo. La date au-dessus du titre et les commandes précédent/suivant des journées sont masquées ; la frise tactile sert à choisir une journée. L’affichage sur ordinateur conserve ses commandes.
+- **Agrandissement** : cliquer ou toucher la photo ouvre sa version en grand, sans icône superposée.
 - **FR / EN** : interface bilingue ; les contenus sans traduction retombent sur la version française.
 - **Commentaires** : formulaire public avec validation préalable. Aucun compte visiteur requis.
 - **Lien direct** : `https://ton-domaine/#2026-10-20` ouvre cette journée si elle est publiée.
